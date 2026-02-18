@@ -33,6 +33,10 @@ class GitHubDataSource(Protocol):
         """Fetch commits from repositories."""
         ...
 
+    def fetch_commit_count(self, username: str, since_date: str = None) -> int:
+        """Fetch total commit count using search API."""
+        ...
+
     def fetch_repo_contributors(self, repo_name: str, min_commits: int) -> list:
         """Fetch contributors for a specific repository."""
         ...
@@ -137,6 +141,38 @@ class DirectAPISource:
                 continue
 
         return all_commits
+
+    def fetch_commit_count(self, username: str, since_date: str = None) -> int:
+        """
+        Fetch total commit count using GitHub search API.
+
+        Args:
+            username: GitHub username
+            since_date: ISO date string (YYYY-MM-DD) to filter commits after this date
+
+        Returns:
+            Total number of commits
+        """
+        try:
+            # Build search query
+            query = f"author:{username}"
+            if since_date:
+                query += f" author-date:>={since_date}"
+
+            resp = requests.get(
+                f"{self.base}/search/commits",
+                headers={**self.headers, "Accept": "application/vnd.github.cloak-preview+json"},
+                params={"q": query, "per_page": 1},
+                timeout=API_TIMEOUT
+            )
+
+            if resp.ok:
+                data = resp.json()
+                return data.get("total_count", 0)
+        except Exception as e:
+            print(f"Warning: Failed to fetch commit count via search API: {e}")
+
+        return 0
 
     def fetch_repo_contributors(self, repo_name: str, min_commits: int = 1) -> list:
         """

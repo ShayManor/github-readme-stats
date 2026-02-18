@@ -9,9 +9,30 @@ from ..utils import escape, card_wrapper
 def render_languages_widget(languages: list[LanguageData], theme_name: str = "dark") -> str:
     """Renders the languages donut chart widget."""
     t = THEMES[theme_name]
-    langs = sorted(languages, key=lambda l: -l.percentage)[:6]
-    if not langs:
+    top_langs = sorted(languages, key=lambda l: -l.percentage)[:5]
+    if not top_langs:
         return ""
+
+    # Ensure percentages always sum to exactly 100% for a complete circle
+    total_percentage = sum(lang.percentage for lang in top_langs)
+    langs = list(top_langs)
+
+    # Add "Other" category if there are remaining languages
+    if total_percentage < 99.9 and len(languages) > 5:
+        other_percentage = 100 - total_percentage
+        from ..models import LanguageData
+        langs.append(LanguageData(
+            language="Other",
+            percentage=round(other_percentage, 1),
+            loc=0
+        ))
+    elif total_percentage < 99.9:
+        # If we have <= 5 languages total but they don't sum to 100%,
+        # adjust the percentages proportionally to sum to 100%
+        if total_percentage > 0:
+            factor = 100 / total_percentage
+            for lang in langs:
+                lang.percentage = round(lang.percentage * factor, 1)
 
     # Calculate center position to align with legend
     legend_start = 20
@@ -26,7 +47,12 @@ def render_languages_widget(languages: list[LanguageData], theme_name: str = "da
     offset = 0
 
     for i, lang in enumerate(langs):
-        color = LANG_COLORS.get(lang.language, FOCUS_COLORS[i % len(FOCUS_COLORS)])
+        # Use gray for "Other" category
+        if lang.language == "Other":
+            color = t["text_secondary"]
+        else:
+            color = LANG_COLORS.get(lang.language, FOCUS_COLORS[i % len(FOCUS_COLORS)])
+
         dash = circumference * lang.percentage / 100
         gap = circumference - dash
 

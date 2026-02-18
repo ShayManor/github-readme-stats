@@ -10,7 +10,7 @@ def render_collaborators_widget(collabs: list[CollaboratorData], theme_name: str
     t = THEMES[theme_name]
     items = ""
 
-    for i, c in enumerate(collabs[:5]):
+    for i, c in enumerate(collabs[:4]):
         y = i * 50
         avatar_el = ""
 
@@ -24,7 +24,7 @@ def render_collaborators_widget(collabs: list[CollaboratorData], theme_name: str
                   font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
                   font-size="14" font-weight="600" fill="white">{escape(c.username[0].upper())}</text>'''
 
-        bar_max = max((x.shared_commits for x in collabs[:5]), default=1) or 1
+        bar_max = max((x.shared_commits for x in collabs[:4]), default=1) or 1
         bar_w = c.shared_commits / bar_max * 120
 
         items += f'''
@@ -40,5 +40,5 @@ def render_collaborators_widget(collabs: list[CollaboratorData], theme_name: str
       </rect>
     </g>'''
 
-    total_h = len(collabs[:5]) * 50 + 48
+    total_h = len(collabs[:4]) * 50 + 48
     return card_wrapper(items, 380, total_h, t, "Top Collaborators")
