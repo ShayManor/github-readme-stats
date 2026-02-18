@@ -34,6 +34,16 @@ def generate_full_widget(
     print(f"Fetching GitHub data for {username}...")
     github_data = fetch_github_data(username, token)
 
+    # Log commit count for debugging
+    commit_count = len(github_data.get("commits", []))
+    if commit_count == 0:
+        print(f"  Warning: No commits found. This may be due to:")
+        print(f"    - No recent PushEvents in last 100 GitHub events")
+        print(f"    - All commits are from merged PRs")
+        print(f"    - GitHub API rate limiting (try with GITHUB_TOKEN)")
+    else:
+        print(f"  Found {commit_count} commits")
+
     print("Generating widgets...")
     widgets = generate_widgets_from_github(github_data, theme)
 
@@ -68,7 +78,7 @@ def generate_full_widget(
 def main():
     """CLI entry point."""
     username = sys.argv[1] if len(sys.argv) > 1 else "shaymanor"
-    token = os.environ.get("GITHUB_TOKEN")
+    token = os.environ.get("GITHUB_PAT")
     theme = sys.argv[2] if len(sys.argv) > 2 else "dark"
 
     if username:

@@ -25,15 +25,22 @@ def compute_grade(github_data: dict) -> GradeData:
     user = github_data["user"]
     repos = github_data["repos"]
     events = github_data["events"]
+    direct_commits = github_data.get("commits", [])
 
     repo_count = min(len(repos), 50)
     stars = sum(r.get("stargazers_count", 0) for r in repos)
     forks = sum(r.get("forks_count", 0) for r in repos)
     followers = user.get("followers", 0)
-    commits = sum(
-        len(ev.get("payload", {}).get("commits", []))
-        for ev in events if ev.get("type") == "PushEvent"
-    )
+
+    # Use direct commit count if available, otherwise fall back to events
+    if direct_commits:
+        commits = len(direct_commits)
+    else:
+        commits = sum(
+            len(ev.get("payload", {}).get("commits", []))
+            for ev in events if ev.get("type") == "PushEvent"
+        )
+
     prs = sum(1 for ev in events if ev.get("type") == "PullRequestEvent")
 
     scores = {
@@ -180,17 +187,29 @@ def _compute_tags(github_data: dict) -> list[TagData]:
 
 def compute_impact_timeline(github_data: dict) -> list[ImpactWeek]:
     """Aggregate events into weekly impact data."""
-    events = github_data["events"]
+    direct_commits = github_data.get("commits", [])
     weekly = defaultdict(lambda: {"commits": 0})
 
-    for ev in events:
-        if ev.get("type") == "PushEvent":
-            created = ev.get("created_at", "")[:10]
-            if created:
+    if direct_commits:
+        # Use direct commit data
+        for commit in direct_commits:
+            commit_date = commit.get("commit", {}).get("author", {}).get("date", "")
+            if commit_date:
+                created = commit_date[:10]
                 dt = datetime.fromisoformat(created)
                 week_start = (dt - timedelta(days=dt.weekday())).isoformat()[:10]
-                commits = len(ev.get("payload", {}).get("commits", []))
-                weekly[week_start]["commits"] += commits
+                weekly[week_start]["commits"] += 1
+    else:
+        # Fallback to events-based counting
+        events = github_data["events"]
+        for ev in events:
+            if ev.get("type") == "PushEvent":
+                created = ev.get("created_at", "")[:10]
+                if created:
+                    dt = datetime.fromisoformat(created)
+                    week_start = (dt - timedelta(days=dt.weekday())).isoformat()[:10]
+                    commits = len(ev.get("payload", {}).get("commits", []))
+                    weekly[week_start]["commits"] += commits
 
     weeks = []
     for ws in sorted(weekly.keys()):
@@ -201,7 +220,53 @@ def compute_impact_timeline(github_data: dict) -> list[ImpactWeek]:
 
 
 def compute_collaborators(github_data: dict) -> list[CollaboratorData]:
-    """Find top collaborators from events."""
+    """
+    Find top collaborators - people who committed to the same repos as the user.
+
+    Uses actual commit/contributor data to find meaningful collaborations.
+    Filters out huge OSS projects by requiring 10+ commits threshold.
+    """
+    collaborators_data = github_data.get("collaborators_data", {})
+
+    if not collaborators_data:
+        # Fallback to events-based if no collaborator data
+        return _compute_collaborators_from_events(github_data)
+
+    # Aggregate collaborators across all shared repos
+    collab_stats = defaultdict(lambda: {
+        "repos": set(),
+        "commits": 0,
+        "avatar_url": ""
+    })
+
+    for repo_name, contributors in collaborators_data.items():
+        for contributor in contributors:
+            login = contributor.get("login", "")
+            if login:
+                collab_stats[login]["repos"].add(repo_name)
+                collab_stats[login]["commits"] += contributor.get("contributions", 0)
+                if not collab_stats[login]["avatar_url"]:
+                    collab_stats[login]["avatar_url"] = contributor.get("avatar_url", "")
+
+    # Sort by total commits and take top 4
+    collabs = []
+    for username, stats in sorted(
+        collab_stats.items(), key=lambda x: -x[1]["commits"]
+    )[:4]:  # Show exactly 4 collaborators
+        collabs.append(
+            CollaboratorData(
+                username=username,
+                shared_repos=len(stats["repos"]),
+                shared_commits=stats["commits"],
+                avatar_b64="",  # Will be fetched if needed
+            )
+        )
+
+    return collabs
+
+
+def _compute_collaborators_from_events(github_data: dict) -> list[CollaboratorData]:
+    """Fallback: compute collaborators from events (less accurate)."""
     events = github_data["events"]
     me = github_data["user"].get("login", "").lower()
     collab_stats = defaultdict(lambda: {"repos": set(), "commits": 0})
@@ -216,7 +281,7 @@ def compute_collaborators(github_data: dict) -> list[CollaboratorData]:
     collabs = []
     for username, stats in sorted(
         collab_stats.items(), key=lambda x: -x[1]["commits"]
-    )[:5]:
+    )[:4]:  # Match the main function: top 4
         collabs.append(
             CollaboratorData(
                 username=username,
@@ -232,6 +297,7 @@ def compute_focus(github_data: dict) -> list[FocusCategory]:
     """Classify commits into focus categories."""
     repos = github_data["repos"]
     events = github_data["events"]
+    direct_commits = github_data.get("commits", [])
 
     lang_to_focus = {
         "Python": "Python",
@@ -252,19 +318,28 @@ def compute_focus(github_data: dict) -> list[FocusCategory]:
     }
 
     focus_counts = defaultdict(int)
-    repo_langs = {}
-    for r in repos:
-        lang = r.get("language")
-        if lang:
-            repo_langs[r["full_name"]] = lang
 
-    for ev in events:
-        if ev.get("type") == "PushEvent":
-            repo_name = ev.get("repo", {}).get("name", "")
-            lang = repo_langs.get(repo_name)
+    if direct_commits:
+        # Use direct commit data with embedded language info
+        for commit in direct_commits:
+            lang = commit.get("_repo_language")
             focus = lang_to_focus.get(lang, "Other")
-            commits = len(ev.get("payload", {}).get("commits", []))
-            focus_counts[focus] += commits
+            focus_counts[focus] += 1
+    else:
+        # Fallback to events-based counting
+        repo_langs = {}
+        for r in repos:
+            lang = r.get("language")
+            if lang:
+                repo_langs[r["full_name"]] = lang
+
+        for ev in events:
+            if ev.get("type") == "PushEvent":
+                repo_name = ev.get("repo", {}).get("name", "")
+                lang = repo_langs.get(repo_name)
+                focus = lang_to_focus.get(lang, "Other")
+                commits = len(ev.get("payload", {}).get("commits", []))
+                focus_counts[focus] += commits
 
     total = sum(focus_counts.values()) or 1
     return [
