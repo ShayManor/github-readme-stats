@@ -54,16 +54,6 @@ GITHUB_TOKEN=your_token python run.py <username>
 python run.py <username> light
 ```
 
-## PyCharm Setup
-
-To fix import resolution in PyCharm:
-
-1. Right-click on the `src` folder
-2. Select **Mark Directory as** → **Sources Root**
-3. PyCharm will now resolve all imports correctly
-
-Alternatively, the project is set up with proper relative imports, so imports should work automatically once `src` is marked as a source root.
-
 ## Extending
 
 ### Adding a New Widget
