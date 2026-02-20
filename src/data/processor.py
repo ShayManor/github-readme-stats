@@ -340,59 +340,82 @@ def _compute_collaborators_from_events(github_data: dict) -> list[CollaboratorDa
 
 
 def compute_focus(github_data: dict) -> list[FocusCategory]:
-    """Classify commits into focus categories based on repo languages and activity."""
+    """Classify contributions into focus categories based on repo languages weighted by activity."""
     repos = github_data["repos"]
-    events = github_data["events"]
+    total_contributions = github_data.get("recent_commits", 0)  # Last 6 months
 
+    # Map languages to focus categories (languages can belong to multiple categories)
     lang_to_focus = {
-        "Python": "Python",
-        "JavaScript": "Frontend",
-        "TypeScript": "Frontend",
-        "HTML": "Frontend",
-        "CSS": "Frontend",
-        "Go": "Backend",
-        "Rust": "Systems",
-        "Java": "Backend",
-        "C++": "Systems",
-        "C": "Systems",
-        "Ruby": "Backend",
-        "PHP": "Backend",
-        "Shell": "DevOps",
-        "Dockerfile": "DevOps",
-        "Jupyter Notebook": "ML",
+        "Python": ["Backend", "ML"],
+        "JavaScript": ["Frontend"],
+        "TypeScript": ["Frontend"],
+        "HTML": ["Frontend"],
+        "CSS": ["Frontend"],
+        "Vue": ["Frontend"],
+        "React": ["Frontend"],
+        "Go": ["Backend"],
+        "Rust": ["Backend", "Systems"],
+        "Java": ["Backend"],
+        "C++": ["Systems"],
+        "C": ["Systems"],
+        "Ruby": ["Backend"],
+        "PHP": ["Backend"],
+        "Shell": ["DevOps"],
+        "Dockerfile": ["DevOps"],
+        "Makefile": ["DevOps"],
+        "Jupyter Notebook": ["ML"],
+        "R": ["ML"],
+        "Scala": ["Backend", "ML"],
+        "Kotlin": ["Backend", "Mobile"],
+        "Swift": ["Mobile"],
+        "Objective-C": ["Mobile"],
     }
 
-    focus_counts = defaultdict(int)
+    focus_counts = defaultdict(float)
 
-    # Use events-based counting to track actual activity
-    repo_langs = {}
-    for r in repos:
+    # Use top 30 most recently pushed repos
+    sorted_repos = sorted(repos, key=lambda r: r.get("pushed_at", ""), reverse=True)
+    active_repos = sorted_repos[:30]
+
+    # Count languages in active repos
+    lang_weights = defaultdict(int)
+    for r in active_repos:
         lang = r.get("language")
         if lang:
-            repo_langs[r["full_name"]] = lang
+            lang_weights[lang] += 1
 
-    for ev in events:
-        if ev.get("type") == "PushEvent":
-            repo_name = ev.get("repo", {}).get("name", "")
-            lang = repo_langs.get(repo_name)
-            focus = lang_to_focus.get(lang, "Other")
-            commits = len(ev.get("payload", {}).get("commits", []))
-            focus_counts[focus] += commits
+    total_weight = sum(lang_weights.values())
 
-    # If no events, fallback to repo count
-    if not focus_counts:
-        for r in repos:
+    # Distribute contributions proportionally to language presence
+    if total_weight > 0 and total_contributions > 0:
+        for lang, weight in lang_weights.items():
+            contribution_estimate = (weight / total_weight) * total_contributions
+
+            # Add to all applicable focus categories
+            if lang in lang_to_focus:
+                for focus in lang_to_focus[lang]:
+                    focus_counts[focus] += contribution_estimate
+            else:
+                focus_counts["Other"] += contribution_estimate
+    else:
+        # Fallback: use repo counts
+        for r in active_repos:
             lang = r.get("language")
-            if lang:
-                focus = lang_to_focus.get(lang, "Other")
-                focus_counts[focus] += 1
+            if lang in lang_to_focus:
+                for focus in lang_to_focus[lang]:
+                    focus_counts[focus] += 1
+            elif lang:
+                focus_counts["Other"] += 1
 
-    total = sum(focus_counts.values()) or 1
+    # Use total contributions as the base for percentages (allows overlap > 100%)
+    total = total_contributions if total_contributions > 0 else sum(focus_counts.values())
+    total = total or 1
+
     return [
         FocusCategory(
             category=cat,
             percentage=round(count / total * 100, 1),
-            commit_count=count,
+            commit_count=int(count),
         )
         for cat, count in sorted(focus_counts.items(), key=lambda x: -x[1])
     ]
