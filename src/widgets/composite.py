@@ -46,10 +46,8 @@ def compose_widget(
 
     header = f'''
     {avatar_svg}
-    <text x="54" y="28" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+    <text x="54" y="38" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
           font-size="16" font-weight="700" fill="{t["text"]}">{escape(username or "Developer")}</text>
-    <text x="54" y="44" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
-          font-size="11" fill="{t["text_secondary"]}">GitHub Profile Widget</text>
     <line x1="{padding}" y1="{header_h}" x2="{total_w - padding}" y2="{header_h}"
           stroke="{t["card_border"]}" stroke-width="0.5"/>'''
 
