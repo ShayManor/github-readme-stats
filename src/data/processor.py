@@ -20,8 +20,14 @@ from ..widgets import (
 )
 
 
-def compute_grade(github_data: dict) -> GradeData:
-    """Compute a developer grade from GitHub profile data."""
+def compute_grade(github_data: dict, custom_tags: list[str] = None) -> GradeData:
+    """
+    Compute a developer grade from GitHub profile data.
+
+    Args:
+        github_data: GitHub profile data dictionary
+        custom_tags: Optional list of custom tags to include (e.g., ["open-source", "hackathon-winner"])
+    """
     user = github_data["user"]
     repos = github_data["repos"]
     events = github_data["events"]
@@ -111,7 +117,7 @@ def compute_grade(github_data: dict) -> GradeData:
         "followers": followers,
     }
 
-    tags = _compute_tags(github_data)
+    tags = _compute_tags(github_data, custom_tags=custom_tags, hidden_languages=None)
 
     return GradeData(
         grade=grade,
@@ -122,15 +128,44 @@ def compute_grade(github_data: dict) -> GradeData:
     )
 
 
-def _compute_tags(github_data: dict) -> list[TagData]:
-    """Infer developer tags from repo languages and topics."""
+def _compute_tags(github_data: dict, max_tags: int = None, custom_tags: list[str] = None, hidden_languages: list[str] = None) -> list[TagData]:
+    """
+    Infer developer tags from repo languages and topics using percentage thresholds.
+
+    Tags are awarded based on:
+    - Frontend: >50% frontend languages
+    - Backend: >50% backend languages
+    - ML: >25% ML-related languages
+    - Fullstack: >25% frontend AND >25% backend
+    - Systems: >50% systems languages
+    - DevOps: >25% DevOps-related languages
+    - Mobile: >50% mobile languages
+
+    Args:
+        github_data: GitHub data dictionary
+        max_tags: Maximum number of tags to return (1-20). Defaults to TAG_MAX_COUNT from config.
+        custom_tags: Optional list of custom tags to add (e.g., ["open-source", "hackathon-winner"])
+        hidden_languages: Optional list of languages to exclude from tag calculation
+
+    Returns:
+        List of TagData objects with inferred developer roles
+    """
+    from ..config import TAG_MAX_COUNT, TAG_LANGUAGE_MAP, TAG_TOPIC_MAP, HIDDEN_LANGUAGES
+
+    if max_tags is None:
+        max_tags = TAG_MAX_COUNT
+    max_tags = min(max(max_tags, 1), 20)  # Clamp between 1 and 20
+
+    if hidden_languages is None:
+        hidden_languages = HIDDEN_LANGUAGES
+
     repos = github_data["repos"]
     lang_counts = defaultdict(int)
     topic_set = set()
 
     for r in repos:
         lang = r.get("language")
-        if lang:
+        if lang and lang not in hidden_languages:
             lang_counts[lang] += 1
         for topic in r.get("topics", []):
             topic_set.add(topic.lower())
@@ -138,61 +173,71 @@ def _compute_tags(github_data: dict) -> list[TagData]:
     tags = []
     total = sum(lang_counts.values()) or 1
 
-    lang_map = {
-        "Python": ["ml-engineer", "backend"],
-        "JavaScript": ["frontend"],
-        "TypeScript": ["frontend"],
-        "Go": ["backend", "systems"],
-        "Rust": ["systems"],
-        "Java": ["backend"],
-        "C++": ["systems"],
-        "Swift": ["mobile"],
-        "Kotlin": ["mobile"],
-        "Dockerfile": ["devops"],
-        "HCL": ["devops", "cloud"],
-    }
+    # Calculate percentage for each category
+    category_percentages = defaultdict(float)
 
-    inferred = defaultdict(float)
     for lang, count in lang_counts.items():
         pct = count / total
-        for tag in lang_map.get(lang, []):
-            inferred[tag] = max(inferred[tag], pct)
+        for category in TAG_LANGUAGE_MAP.get(lang, []):
+            category_percentages[category] += pct
 
-    topic_map = {
-        "machine-learning": "ml-engineer",
-        "deep-learning": "ml-engineer",
-        "frontend": "frontend",
-        "react": "frontend",
-        "vue": "frontend",
-        "backend": "backend",
-        "api": "backend",
-        "database": "database",
-        "devops": "devops",
-        "docker": "devops",
-        "kubernetes": "devops",
-        "security": "security",
-        "fullstack": "fullstack",
-    }
-
+    # Infer tags from repository topics
     for topic in topic_set:
-        if topic in topic_map:
-            inferred[topic_map[topic]] = max(
-                inferred.get(topic_map[topic], 0), 0.7
-            )
+        if topic in TAG_TOPIC_MAP:
+            category = TAG_TOPIC_MAP[topic]
+            category_percentages[category] = max(category_percentages[category], 0.3)
 
-    # Fullstack heuristic
-    has_fe = any(
-        lang_counts.get(l, 0) > 0 for l in ["JavaScript", "TypeScript"]
-    )
-    has_be = any(
-        lang_counts.get(l, 0) > 0
-        for l in ["Python", "Go", "Java", "Rust", "C++"]
-    )
-    if has_fe and has_be:
-        inferred["fullstack"] = max(inferred.get("fullstack", 0), 0.6)
+    # Apply threshold rules
+    awarded_tags = []
 
-    for tag, conf in sorted(inferred.items(), key=lambda x: -x[1])[:6]:
-        tags.append(TagData(tag=tag, source="earned", confidence=round(conf, 2)))
+    # Fullstack: >25% frontend AND >25% backend
+    if category_percentages.get("Frontend", 0) > 0.25 and category_percentages.get("Backend", 0) > 0.25:
+        awarded_tags.append(("fullstack", max(category_percentages.get("Frontend", 0), category_percentages.get("Backend", 0))))
+
+    # ML: >25%
+    if category_percentages.get("ML", 0) > 0.25:
+        awarded_tags.append(("ml-engineer", category_percentages["ML"]))
+
+    # Backend: >50%
+    if category_percentages.get("Backend", 0) > 0.50:
+        awarded_tags.append(("backend", category_percentages["Backend"]))
+
+    # Frontend: >50%
+    if category_percentages.get("Frontend", 0) > 0.50:
+        awarded_tags.append(("frontend", category_percentages["Frontend"]))
+
+    # Systems: >50%
+    if category_percentages.get("Systems", 0) > 0.50:
+        awarded_tags.append(("systems", category_percentages["Systems"]))
+
+    # DevOps: >25%
+    if category_percentages.get("DevOps", 0) > 0.25:
+        awarded_tags.append(("devops", category_percentages["DevOps"]))
+
+    # Mobile: >50%
+    if category_percentages.get("Mobile", 0) > 0.50:
+        awarded_tags.append(("mobile", category_percentages["Mobile"]))
+
+    # Database: >25%
+    if category_percentages.get("Database", 0) > 0.25:
+        awarded_tags.append(("database", category_percentages["Database"]))
+
+    # Cloud: >25%
+    if category_percentages.get("Cloud", 0) > 0.25:
+        awarded_tags.append(("cloud", category_percentages["Cloud"]))
+
+    # Security: >25%
+    if category_percentages.get("Security", 0) > 0.25:
+        awarded_tags.append(("security", category_percentages["Security"]))
+
+    # Add custom tags with high confidence
+    if custom_tags:
+        for tag in custom_tags:
+            awarded_tags.append((tag, 1.0))
+
+    # Sort by confidence and limit to max_tags
+    for tag, conf in sorted(awarded_tags, key=lambda x: -x[1])[:max_tags]:
+        tags.append(TagData(tag=tag, source="earned" if conf < 1.0 else "custom", confidence=round(conf, 2)))
 
     return tags
 
@@ -339,8 +384,19 @@ def _compute_collaborators_from_events(github_data: dict) -> list[CollaboratorDa
     return collabs
 
 
-def compute_focus(github_data: dict) -> list[FocusCategory]:
-    """Classify contributions into focus categories based on repo languages weighted by activity."""
+def compute_focus(github_data: dict, hidden_languages: list[str] = None) -> list[FocusCategory]:
+    """
+    Classify contributions into focus categories based on repo languages weighted by activity.
+
+    Args:
+        github_data: GitHub profile data
+        hidden_languages: Optional list of languages to exclude
+    """
+    from ..config import HIDDEN_LANGUAGES
+
+    if hidden_languages is None:
+        hidden_languages = HIDDEN_LANGUAGES
+
     repos = github_data["repos"]
     total_contributions = github_data.get("recent_commits", 0)  # Last 6 months
 
@@ -377,11 +433,11 @@ def compute_focus(github_data: dict) -> list[FocusCategory]:
     sorted_repos = sorted(repos, key=lambda r: r.get("pushed_at", ""), reverse=True)
     active_repos = sorted_repos[:30]
 
-    # Count languages in active repos
+    # Count languages in active repos (excluding hidden languages)
     lang_weights = defaultdict(int)
     for r in active_repos:
         lang = r.get("language")
-        if lang:
+        if lang and lang not in hidden_languages:
             lang_weights[lang] += 1
 
     total_weight = sum(lang_weights.values())
@@ -421,14 +477,26 @@ def compute_focus(github_data: dict) -> list[FocusCategory]:
     ]
 
 
-def compute_languages(github_data: dict) -> list[LanguageData]:
-    """Compute language distribution from repos."""
+def compute_languages(github_data: dict, hidden_languages: list[str] = None) -> list[LanguageData]:
+    """
+    Compute language distribution from repos.
+
+    Args:
+        github_data: GitHub profile data
+        hidden_languages: Optional list of languages to exclude (e.g., ["HTML", "CSS"])
+    """
+    from ..config import HIDDEN_LANGUAGES
+
+    if hidden_languages is None:
+        hidden_languages = HIDDEN_LANGUAGES
+
     repos = github_data["repos"]
     lang_counts = defaultdict(int)
     for r in repos:
         lang = r.get("language")
-        if lang:
+        if lang and lang not in hidden_languages:
             lang_counts[lang] += 1
+
     total = sum(lang_counts.values()) or 1
     return [
         LanguageData(
@@ -441,17 +509,26 @@ def compute_languages(github_data: dict) -> list[LanguageData]:
 
 
 def generate_widgets_from_github(
-    github_data: dict, theme: str = "dark"
+    github_data: dict,
+    theme: str = "dark",
+    custom_tags: list[str] = None,
+    hidden_languages: list[str] = None
 ) -> dict[str, str]:
     """
     Takes raw GitHub API data and returns rendered SVG strings
     for each widget type.
+
+    Args:
+        github_data: GitHub profile data
+        theme: Color theme name
+        custom_tags: Optional list of custom tags to add to the grade widget
+        hidden_languages: Optional list of languages to exclude from stats
     """
-    grade = compute_grade(github_data)
+    grade = compute_grade(github_data, custom_tags=custom_tags)
     impact = compute_impact_timeline(github_data)
     collabs = compute_collaborators(github_data)
-    focus = compute_focus(github_data)
-    languages = compute_languages(github_data)
+    focus = compute_focus(github_data, hidden_languages=hidden_languages)
+    languages = compute_languages(github_data, hidden_languages=hidden_languages)
 
     return {
         "grade": render_grade_widget(grade, theme),

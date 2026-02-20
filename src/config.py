@@ -26,3 +26,61 @@ API_TIMEOUT = int(os.getenv("API_TIMEOUT", "5"))
 # Data source
 DATA_SOURCE_TYPE = os.getenv("DATA_SOURCE", "direct")
 """Data source type: 'direct' for immediate API calls, 'queued' for batch processing."""
+
+# Widget settings
+WIDGET_ORDER = ["grade", "impact", "collaborators", "focus", "languages", "achievements"]
+"""Default order of widgets. Customize by reordering this list."""
+
+ENABLED_WIDGETS = ["grade", "impact", "collaborators", "focus", "languages", "achievements"]
+"""Which widgets to display. Remove any you don't want to show."""
+
+# Language filtering
+HIDDEN_LANGUAGES = []
+"""Languages to exclude from stats (e.g., ["HTML", "CSS", "Makefile"])."""
+
+# Tag settings
+TAG_MAX_COUNT = int(os.getenv("TAG_MAX_COUNT", "6"))
+"""Maximum number of tags to display (1-20)."""
+
+TAG_LANGUAGE_MAP = {
+    "Python": ["ML", "Backend"],
+    "JavaScript": ["Frontend"],
+    "TypeScript": ["Frontend"],
+    "HTML": ["Frontend"],
+    "CSS": ["Frontend"],
+    "Go": ["Backend"],
+    "Rust": ["Systems", "Backend"],
+    "Java": ["Backend"],
+    "C++": ["Systems"],
+    "C": ["Systems"],
+    "Swift": ["Mobile"],
+    "Kotlin": ["Mobile", "Backend"],
+    "Ruby": ["Backend"],
+    "PHP": ["Backend"],
+    "Shell": ["DevOps"],
+    "Dockerfile": ["DevOps"],
+    "HCL": ["DevOps", "Cloud"],
+    "Jupyter Notebook": ["ML"],
+}
+"""Map programming languages to developer role categories."""
+
+TAG_TOPIC_MAP = {
+    "machine-learning": "ML",
+    "deep-learning": "ML",
+    "ai": "ML",
+    "frontend": "Frontend",
+    "react": "Frontend",
+    "vue": "Frontend",
+    "backend": "Backend",
+    "api": "Backend",
+    "database": "Database",
+    "devops": "DevOps",
+    "docker": "DevOps",
+    "kubernetes": "DevOps",
+    "security": "Security",
+    "cloud": "Cloud",
+    "aws": "Cloud",
+    "azure": "Cloud",
+    "gcp": "Cloud",
+}
+"""Map repository topics to developer role categories."""
