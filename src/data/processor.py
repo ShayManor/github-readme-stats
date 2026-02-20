@@ -25,23 +25,35 @@ def compute_grade(github_data: dict) -> GradeData:
     user = github_data["user"]
     repos = github_data["repos"]
     events = github_data["events"]
-    direct_commits = github_data.get("commits", [])
+
+    # Use accurate contribution count (commits + PRs + issues + reviews) from GraphQL
+    commits = github_data.get("total_commits", 0)
+
+    # Fallback to daily contribution data if aggregation didn't work
+    if commits == 0:
+        daily_contribs = github_data.get("commits", [])
+        if daily_contribs and isinstance(daily_contribs, list) and len(daily_contribs) > 0:
+            if isinstance(daily_contribs[0], dict) and "count" in daily_contribs[0]:
+                commits = sum(day.get("count", 0) for day in daily_contribs)
+            else:
+                commits = len(daily_contribs)
+        else:
+            commits = sum(
+                len(ev.get("payload", {}).get("commits", []))
+                for ev in events if ev.get("type") == "PushEvent"
+            )
 
     repo_count = min(len(repos), 50)
     stars = sum(r.get("stargazers_count", 0) for r in repos)
     forks = sum(r.get("forks_count", 0) for r in repos)
     followers = user.get("followers", 0)
 
-    # Use direct commit count if available, otherwise fall back to events
-    if direct_commits:
-        commits = len(direct_commits)
-    else:
-        commits = sum(
-            len(ev.get("payload", {}).get("commits", []))
-            for ev in events if ev.get("type") == "PushEvent"
-        )
+    # Use accurate PR count from search API
+    prs = github_data.get("total_prs", 0)
 
-    prs = sum(1 for ev in events if ev.get("type") == "PullRequestEvent")
+    # Fallback to events if not available
+    if prs == 0:
+        prs = sum(1 for ev in events if ev.get("type") == "PullRequestEvent")
 
     scores = {
         "repos": min(repo_count / 30 * 100, 100),
@@ -186,30 +198,64 @@ def _compute_tags(github_data: dict) -> list[TagData]:
 
 
 def compute_impact_timeline(github_data: dict) -> list[ImpactWeek]:
-    """Aggregate events into weekly impact data."""
-    direct_commits = github_data.get("commits", [])
+    """Aggregate daily contributions into weekly impact data using GitHub's contribution calendar."""
+    daily_contributions = github_data.get("commits", [])
     weekly = defaultdict(lambda: {"commits": 0})
 
-    if direct_commits:
-        # Use direct commit data
-        for commit in direct_commits:
-            commit_date = commit.get("commit", {}).get("author", {}).get("date", "")
-            if commit_date:
-                created = commit_date[:10]
-                dt = datetime.fromisoformat(created)
-                week_start = (dt - timedelta(days=dt.weekday())).isoformat()[:10]
-                weekly[week_start]["commits"] += 1
+    # Calculate date boundaries
+    now = datetime.now()
+    current_week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    six_months_ago = now - timedelta(days=180)
+
+    if daily_contributions and isinstance(daily_contributions, list) and len(daily_contributions) > 0:
+        # Use GraphQL daily contribution data (format: [{"date": "YYYY-MM-DD", "count": N}])
+        if isinstance(daily_contributions[0], dict) and "date" in daily_contributions[0] and "count" in daily_contributions[0]:
+            for day_data in daily_contributions:
+                date_str = day_data.get("date", "")
+                count = day_data.get("count", 0)
+
+                if date_str:
+                    dt = datetime.fromisoformat(date_str)
+
+                    # Calculate week start (Monday)
+                    week_start_dt = dt - timedelta(days=dt.weekday())
+                    week_start_str = week_start_dt.isoformat()[:10]
+
+                    # Only include last 6 months, excluding current week
+                    if dt >= six_months_ago and week_start_dt < current_week_start:
+                        weekly[week_start_str]["commits"] += count
+        else:
+            # Old REST API format fallback
+            for commit in daily_contributions:
+                commit_date = commit.get("commit", {}).get("author", {}).get("date", "")
+                if commit_date:
+                    created = commit_date[:10]
+                    dt = datetime.fromisoformat(created)
+
+                    # Calculate week start (Monday)
+                    week_start_dt = dt - timedelta(days=dt.weekday())
+                    week_start_str = week_start_dt.isoformat()[:10]
+
+                    # Only include last 6 months, excluding current week
+                    if dt >= six_months_ago and week_start_dt < current_week_start:
+                        weekly[week_start_str]["commits"] += 1
     else:
         # Fallback to events-based counting
-        events = github_data["events"]
+        events = github_data.get("events", [])
         for ev in events:
             if ev.get("type") == "PushEvent":
                 created = ev.get("created_at", "")[:10]
                 if created:
                     dt = datetime.fromisoformat(created)
-                    week_start = (dt - timedelta(days=dt.weekday())).isoformat()[:10]
-                    commits = len(ev.get("payload", {}).get("commits", []))
-                    weekly[week_start]["commits"] += commits
+
+                    # Calculate week start (Monday)
+                    week_start_dt = dt - timedelta(days=dt.weekday())
+                    week_start_str = week_start_dt.isoformat()[:10]
+
+                    # Only include last 6 months, excluding current week
+                    if dt >= six_months_ago and week_start_dt < current_week_start:
+                        commits = len(ev.get("payload", {}).get("commits", []))
+                        weekly[week_start_str]["commits"] += commits
 
     weeks = []
     for ws in sorted(weekly.keys()):
@@ -294,10 +340,9 @@ def _compute_collaborators_from_events(github_data: dict) -> list[CollaboratorDa
 
 
 def compute_focus(github_data: dict) -> list[FocusCategory]:
-    """Classify commits into focus categories."""
+    """Classify commits into focus categories based on repo languages and activity."""
     repos = github_data["repos"]
     events = github_data["events"]
-    direct_commits = github_data.get("commits", [])
 
     lang_to_focus = {
         "Python": "Python",
@@ -319,27 +364,28 @@ def compute_focus(github_data: dict) -> list[FocusCategory]:
 
     focus_counts = defaultdict(int)
 
-    if direct_commits:
-        # Use direct commit data with embedded language info
-        for commit in direct_commits:
-            lang = commit.get("_repo_language")
+    # Use events-based counting to track actual activity
+    repo_langs = {}
+    for r in repos:
+        lang = r.get("language")
+        if lang:
+            repo_langs[r["full_name"]] = lang
+
+    for ev in events:
+        if ev.get("type") == "PushEvent":
+            repo_name = ev.get("repo", {}).get("name", "")
+            lang = repo_langs.get(repo_name)
             focus = lang_to_focus.get(lang, "Other")
-            focus_counts[focus] += 1
-    else:
-        # Fallback to events-based counting
-        repo_langs = {}
+            commits = len(ev.get("payload", {}).get("commits", []))
+            focus_counts[focus] += commits
+
+    # If no events, fallback to repo count
+    if not focus_counts:
         for r in repos:
             lang = r.get("language")
             if lang:
-                repo_langs[r["full_name"]] = lang
-
-        for ev in events:
-            if ev.get("type") == "PushEvent":
-                repo_name = ev.get("repo", {}).get("name", "")
-                lang = repo_langs.get(repo_name)
                 focus = lang_to_focus.get(lang, "Other")
-                commits = len(ev.get("payload", {}).get("commits", []))
-                focus_counts[focus] += commits
+                focus_counts[focus] += 1
 
     total = sum(focus_counts.values()) or 1
     return [

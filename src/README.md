@@ -68,6 +68,41 @@ python run.py <username> light
 1. Add theme definition to `themes/themes.py`
 2. Use the theme name when calling `generate_full_widget(theme="my_theme")`
 
+## Configuration
+
+Customize behavior via environment variables:
+
+```bash
+# Collaborator settings
+export COLLABORATOR_MIN_COMMITS=10        # Min commits to be a collaborator (default: 10)
+export COLLABORATOR_MAX_REPO_SIZE=100     # Skip repos with 100+ contributors (default: 100)
+export COLLABORATOR_TOP_REPOS=5           # Check top N repos for collaborators (default: 5)
+
+# Commit fetching
+export COMMIT_MAX_REPOS=10                # Fetch commits from top N repos (default: 10)
+export COMMIT_PER_REPO=30                 # Commits per repo (default: 30)
+
+# API settings
+export API_TIMEOUT=5                      # Request timeout in seconds (default: 5)
+
+# Run with custom settings
+COLLABORATOR_MIN_COMMITS=15 python run.py username
+```
+
+## How Collaborators Are Detected
+
+The widget finds **meaningful collaborators** by:
+
+1. **Identifying shared repositories**: Looks at repos where the user has committed
+2. **Fetching contributors**: Gets all contributors from those repos
+3. **Applying thresholds**:
+   - Only includes contributors with 10+ commits (configurable)
+   - Filters out huge OSS projects (100+ contributors)
+   - Focuses on user's top 5 most active repos
+4. **Ranking by collaboration**: Sorts by total shared commits across all repos
+
+This ensures collaborators are people you've actually worked with closely, not random contributors from large open-source projects.
+
 ## Development
 
 All widgets follow the same pattern:

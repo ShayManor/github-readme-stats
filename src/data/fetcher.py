@@ -29,12 +29,16 @@ class GitHubDataSource(Protocol):
         """Fetch user events."""
         ...
 
-    def fetch_commits(self, username: str, repos: list) -> list:
-        """Fetch commits from repositories."""
+    def fetch_commits(self, username: str, repos: list = None) -> list:
+        """Fetch daily commit data from contribution calendar."""
         ...
 
-    def fetch_commit_count(self, username: str, since_date: str = None) -> int:
-        """Fetch total commit count using search API."""
+    def fetch_commit_count(self, username: str, repos: list, since_date: str = None) -> int:
+        """Fetch total commit count by aggregating from repos."""
+        ...
+
+    def fetch_pr_count(self, username: str) -> int:
+        """Fetch total PR count using search API."""
         ...
 
     def fetch_repo_contributors(self, repo_name: str, min_commits: int) -> list:
@@ -100,68 +104,255 @@ class DirectAPISource:
         ).json()
         return resp if isinstance(resp, list) else []
 
-    def fetch_commits(self, username: str, repos: list, max_repos: int = COMMIT_MAX_REPOS) -> list:
+    def fetch_commits(self, username: str, repos: list = None) -> list:
         """
-        Fetch recent commits directly from user's repositories.
+        Fetch daily commit data using GitHub's GraphQL contributionsCollection.
+
+        Uses the contribution calendar to get accurate daily commit counts
+        matching what GitHub shows on the user's profile page.
 
         Args:
             username: GitHub username
-            repos: List of repository dicts
-            max_repos: Maximum number of repos to fetch from
+            repos: Not used, kept for interface compatibility
 
         Returns:
-            List of commits with repo context
+            List of daily commit data: [{"date": "YYYY-MM-DD", "count": N}, ...]
         """
-        all_commits = []
-        sorted_repos = sorted(
-            repos, key=lambda r: r.get("pushed_at", ""), reverse=True
-        )[:max_repos]
+        from datetime import datetime
 
-        for repo in sorted_repos:
-            repo_name = repo.get("full_name")
-            if not repo_name:
-                continue
+        try:
+            # Get the last year of contribution data
+            now = datetime.now()
+            one_year_ago = now.replace(year=now.year - 1)
+            from_date = one_year_ago.strftime("%Y-%m-%dT%H:%M:%SZ")
+            to_date = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-            try:
-                commits_resp = requests.get(
-                    f"{self.base}/repos/{repo_name}/commits",
-                    headers=self.headers,
-                    params={"author": username, "per_page": COMMIT_PER_REPO},
-                    timeout=API_TIMEOUT
-                )
+            query = f'''
+            query {{
+              user(login: "{username}") {{
+                contributionsCollection(from: "{from_date}", to: "{to_date}") {{
+                  contributionCalendar {{
+                    weeks {{
+                      contributionDays {{
+                        date
+                        contributionCount
+                      }}
+                    }}
+                  }}
+                }}
+              }}
+            }}
+            '''
 
-                if commits_resp.ok:
-                    commits = commits_resp.json()
-                    for commit in commits:
-                        commit["_repo_name"] = repo_name
-                        commit["_repo_language"] = repo.get("language")
-                    all_commits.extend(commits)
-            except Exception as e:
-                print(f"Warning: Failed to fetch commits from {repo_name}: {e}")
-                continue
+            headers = {
+                **self.headers,
+                'Content-Type': 'application/json'
+            }
+            # GraphQL uses Bearer token
+            if 'Authorization' in headers and headers['Authorization'].startswith('token '):
+                headers['Authorization'] = headers['Authorization'].replace('token ', 'Bearer ')
 
-        return all_commits
+            resp = requests.post(
+                'https://api.github.com/graphql',
+                json={'query': query},
+                headers=headers,
+                timeout=API_TIMEOUT
+            )
 
-    def fetch_commit_count(self, username: str, since_date: str = None) -> int:
+            if not resp.ok:
+                print(f"  GraphQL error fetching commits: {resp.status_code}")
+                return []
+
+            data = resp.json()
+            if 'data' not in data or not data['data'].get('user'):
+                print("  No user data in GraphQL response")
+                return []
+
+            # Extract daily commit data
+            daily_commits = []
+            weeks = data['data']['user']['contributionsCollection']['contributionCalendar']['weeks']
+
+            for week in weeks:
+                for day in week['contributionDays']:
+                    if day['contributionCount'] > 0:  # Only include days with commits
+                        daily_commits.append({
+                            'date': day['date'],
+                            'count': day['contributionCount']
+                        })
+
+            print(f"  GraphQL API found {len(daily_commits)} days with commits")
+            return daily_commits
+
+        except Exception as e:
+            print(f"  Error fetching daily commits via GraphQL: {e}")
+            return []
+
+    def fetch_commit_count(self, username: str, repos: list, since_date: str = None) -> int:
         """
-        Fetch total commit count using GitHub search API.
+        Fetch total contribution count using GitHub GraphQL API.
+
+        Uses the contributionsCollection to get accurate contribution counts (commits, PRs,
+        issues, reviews) matching what GitHub shows on user profiles and what streak-stats displays.
+        Fetches year-by-year to get all-time total.
 
         Args:
             username: GitHub username
-            since_date: ISO date string (YYYY-MM-DD) to filter commits after this date
+            repos: List of repository dicts (unused, kept for interface compatibility)
+            since_date: ISO date string (YYYY-MM-DD) to filter contributions after this date
 
         Returns:
-            Total number of commits
+            Total number of contributions (commits + PRs + issues + reviews)
+        """
+        from datetime import datetime
+
+        try:
+            # If since_date is provided, use specific date range
+            if since_date:
+                return self._fetch_commit_count_graphql_range(username, since_date)
+            else:
+                return self._fetch_commit_count_graphql_alltime(username)
+        except Exception as e:
+            print(f"  Error fetching contribution count: {e}")
+            return 0
+
+    def _fetch_commit_count_graphql_alltime(self, username: str) -> int:
+        """Fetch all-time contribution count using GraphQL."""
+        from datetime import datetime
+
+        # First, get account creation date
+        query = '''
+        query($username: String!) {
+          user(login: $username) {
+            createdAt
+          }
+        }
+        '''
+
+        headers = {
+            **self.headers,
+            'Content-Type': 'application/json'
+        }
+        # GraphQL uses Bearer token instead of 'token'
+        if 'Authorization' in headers and headers['Authorization'].startswith('token '):
+            headers['Authorization'] = headers['Authorization'].replace('token ', 'Bearer ')
+
+        resp = requests.post(
+            'https://api.github.com/graphql',
+            json={'query': query, 'variables': {'username': username}},
+            headers=headers,
+            timeout=API_TIMEOUT
+        )
+
+        if not resp.ok or 'data' not in resp.json():
+            print(f"  GraphQL error: {resp.status_code}")
+            return 0
+
+        data = resp.json()
+        if not data.get('data', {}).get('user'):
+            return 0
+
+        created_at = data['data']['user']['createdAt']
+        created_year = int(created_at[:4])
+        current_year = datetime.now().year
+
+        # Fetch year by year
+        total_contributions = 0
+        print(f"  Fetching contributions from {created_year} to {current_year}...")
+        for year in range(created_year, current_year + 1):
+            year_query = f'''
+            query {{
+              user(login: "{username}") {{
+                contributionsCollection(from: "{year}-01-01T00:00:00Z", to: "{year}-12-31T23:59:59Z") {{
+                  contributionCalendar {{
+                    totalContributions
+                  }}
+                }}
+              }}
+            }}
+            '''
+
+            year_resp = requests.post(
+                'https://api.github.com/graphql',
+                json={'query': year_query},
+                headers=headers,
+                timeout=API_TIMEOUT
+            )
+
+            if year_resp.ok:
+                year_data = year_resp.json()
+                if 'data' in year_data and year_data['data'].get('user'):
+                    year_contributions = year_data['data']['user']['contributionsCollection']['contributionCalendar']['totalContributions']
+                    total_contributions += year_contributions
+                    print(f"    {year}: {year_contributions:,} contributions")
+                else:
+                    print(f"    {year}: Error - {year_data}")
+            else:
+                print(f"    {year}: HTTP {year_resp.status_code}")
+
+        print(f"  GraphQL API found {total_contributions:,} contributions (all-time)")
+        return total_contributions
+
+    def _fetch_commit_count_graphql_range(self, username: str, since_date: str) -> int:
+        """Fetch contribution count for a specific date range using GraphQL."""
+        from datetime import datetime
+
+        # Convert since_date to proper format
+        from_date = f"{since_date}T00:00:00Z"
+        to_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        query = f'''
+        query {{
+          user(login: "{username}") {{
+            contributionsCollection(from: "{from_date}", to: "{to_date}") {{
+              contributionCalendar {{
+                totalContributions
+              }}
+            }}
+          }}
+        }}
+        '''
+
+        headers = {
+            **self.headers,
+            'Content-Type': 'application/json'
+        }
+        # GraphQL uses Bearer token
+        if 'Authorization' in headers and headers['Authorization'].startswith('token '):
+            headers['Authorization'] = headers['Authorization'].replace('token ', 'Bearer ')
+
+        resp = requests.post(
+            'https://api.github.com/graphql',
+            json={'query': query},
+            headers=headers,
+            timeout=API_TIMEOUT
+        )
+
+        if resp.ok:
+            data = resp.json()
+            if 'data' in data and data['data'].get('user'):
+                total = data['data']['user']['contributionsCollection']['contributionCalendar']['totalContributions']
+                print(f"  GraphQL API found {total:,} contributions (since {since_date})")
+                return total
+
+        print(f"  GraphQL error: {resp.status_code if resp else 'unknown'}")
+        return 0
+
+    def fetch_pr_count(self, username: str) -> int:
+        """
+        Fetch total PR count using GitHub search API.
+
+        Args:
+            username: GitHub username
+
+        Returns:
+            Total number of PRs authored by user
         """
         try:
-            # Build search query
-            query = f"author:{username}"
-            if since_date:
-                query += f" author-date:>={since_date}"
+            query = f"is:pr author:{username}"
 
             resp = requests.get(
-                f"{self.base}/search/commits",
-                headers={**self.headers, "Accept": "application/vnd.github.cloak-preview+json"},
+                f"{self.base}/search/issues",
+                headers=self.headers,
                 params={"q": query, "per_page": 1},
                 timeout=API_TIMEOUT
             )
@@ -170,7 +361,7 @@ class DirectAPISource:
                 data = resp.json()
                 return data.get("total_count", 0)
         except Exception as e:
-            print(f"Warning: Failed to fetch commit count via search API: {e}")
+            print(f"Warning: Failed to fetch PR count via search API: {e}")
 
         return 0
 
@@ -242,8 +433,10 @@ def fetch_github_data(
         data_source: Optional data source implementation (defaults to DirectAPISource)
 
     Returns:
-        Dict with user, repos, events, commits, collaborators_data, and avatar_b64
+        Dict with user, repos, events, commits, commit counts, collaborators_data, and avatar_b64
     """
+    from datetime import datetime, timedelta
+
     # Use provided data source or default to direct API
     source = data_source or DirectAPISource(token)
 
@@ -251,11 +444,24 @@ def fetch_github_data(
     user = source.fetch_user_data(username)
     repos = source.fetch_repos(username)
     events = source.fetch_events(username)
-    commits = source.fetch_commits(username, repos)
+    commits = source.fetch_commits(username)
 
-    # Fetch collaborators from repos where user has commits
+    # Fetch contribution counts (commits + PRs + issues + reviews)
+    print("  Fetching all-time contribution count...")
+    total_commits = source.fetch_commit_count(username, repos)
+
+    # Recent contributions (last 6 months)
+    six_months_ago = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
+    print("  Fetching recent contribution count (last 6 months)...")
+    recent_commits = source.fetch_commit_count(username, repos, since_date=six_months_ago)
+
+    # Fetch PR count
+    print("  Fetching PR count...")
+    total_prs = source.fetch_pr_count(username)
+
+    # Fetch collaborators from user's active repos
     collaborators_data = _fetch_collaborators_data(
-        username, commits, source
+        username, repos, source
     )
 
     # Fetch avatar
@@ -268,6 +474,9 @@ def fetch_github_data(
         "repos": repos,
         "events": events,
         "commits": commits,
+        "total_commits": total_commits,
+        "recent_commits": recent_commits,
+        "total_prs": total_prs,
         "collaborators_data": collaborators_data,
         "avatar_b64": avatar_b64,
     }
@@ -275,35 +484,37 @@ def fetch_github_data(
 
 def _fetch_collaborators_data(
     username: str,
-    commits: list,
+    repos: list,
     source: GitHubDataSource,
 ) -> dict:
     """
-    Fetch collaborator data from repos where user has committed.
+    Fetch collaborator data from user's most active repositories.
 
-    Uses config.COLLABORATOR_MIN_COMMITS threshold (default: 10) to filter
+    Uses config.COLLABORATOR_MIN_COMMITS threshold (default: 5) to filter
     out casual contributors and focus on meaningful collaborations.
 
     Args:
         username: The user's GitHub username
-        commits: User's commits with repo context
+        repos: List of user's repositories
         source: Data source to fetch from
 
     Returns:
         Dict mapping repo names to their contributors
     """
-    # Find repos where user has commits
-    user_repos = {}
-    for commit in commits:
-        repo_name = commit.get("_repo_name")
-        if repo_name:
-            user_repos[repo_name] = user_repos.get(repo_name, 0) + 1
+    # Use the user's most recently pushed repos
+    sorted_repos = sorted(
+        repos,
+        key=lambda r: r.get("pushed_at", ""),
+        reverse=True
+    )[:COLLABORATOR_TOP_REPOS]
 
-    # Fetch contributors from user's top repos
     collaborators_by_repo = {}
-    sorted_repos = sorted(user_repos.items(), key=lambda x: -x[1])[:COLLABORATOR_TOP_REPOS]
 
-    for repo_name, user_commit_count in sorted_repos:
+    for repo in sorted_repos:
+        repo_name = repo.get("full_name")
+        if not repo_name:
+            continue
+
         # Fetch contributors with at least COLLABORATOR_MIN_COMMITS
         contributors = source.fetch_repo_contributors(repo_name, COLLABORATOR_MIN_COMMITS)
 

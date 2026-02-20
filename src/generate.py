@@ -34,15 +34,21 @@ def generate_full_widget(
     print(f"Fetching GitHub data for {username}...")
     github_data = fetch_github_data(username, token)
 
-    # Log commit count for debugging
-    commit_count = len(github_data.get("commits", []))
-    if commit_count == 0:
-        print(f"  Warning: No commits found. This may be due to:")
-        print(f"    - No recent PushEvents in last 100 GitHub events")
-        print(f"    - All commits are from merged PRs")
-        print(f"    - GitHub API rate limiting (try with GITHUB_TOKEN)")
+    # Log contribution counts
+    total_commits = github_data.get("total_commits", 0)
+    recent_commits = github_data.get("recent_commits", 0)
+    total_prs = github_data.get("total_prs", 0)
+    daily_commits = len(github_data.get("commits", []))
+
+    if total_commits > 0:
+        print(f"  Total contributions (all-time): {total_commits:,}")
+        print(f"  Recent contributions (6 months): {recent_commits:,}")
+        print(f"  Total PRs (all-time): {total_prs:,}")
+        print(f"  Daily contribution data points: {daily_commits}")
     else:
-        print(f"  Found {commit_count} commits")
+        print(f"  Warning: Could not fetch contribution count")
+        if daily_commits == 0:
+            print(f"    Try running with GITHUB_PAT environment variable")
 
     print("Generating widgets...")
     widgets = generate_widgets_from_github(github_data, theme)
