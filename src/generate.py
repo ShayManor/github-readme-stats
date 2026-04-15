@@ -9,7 +9,8 @@ import os
 from typing import Optional
 
 from .models import AchievementData
-from .data import fetch_github_data, generate_widgets_from_github
+from .data.fetcher import fetch_github_data
+from .data.processor import generate_widgets_from_github
 from .widgets import render_achievements_widget, compose_widget
 
 

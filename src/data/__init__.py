@@ -1,6 +1,11 @@
-"""Data fetching and processing for GitHub profiles."""
+"""Data fetching and processing for GitHub profiles.
 
-from .fetcher import fetch_github_data
+Note: ``fetch_github_data`` is intentionally NOT re-exported from this package
+so that importing :mod:`src.data.processor` (used by the generator service)
+does not transitively pull in the fetcher module and its ``requests`` dependency.
+Import it directly from ``src.data.fetcher`` when you need it.
+"""
+
 from .processor import (
     compute_grade,
     compute_impact_timeline,
@@ -11,7 +16,6 @@ from .processor import (
 )
 
 __all__ = [
-    "fetch_github_data",
     "compute_grade",
     "compute_impact_timeline",
     "compute_collaborators",
