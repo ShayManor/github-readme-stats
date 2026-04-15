@@ -312,47 +312,27 @@ def compute_impact_timeline(github_data: dict) -> list[ImpactWeek]:
 
 def compute_collaborators(github_data: dict) -> list[CollaboratorData]:
     """
-    Find top collaborators - people who committed to the same repos as the user.
+    Return top collaborators from pre-scored data produced by _fetch_collaborators_data.
 
-    Uses actual commit/contributor data to find meaningful collaborations.
-    Filters out huge OSS projects by requiring 10+ commits threshold.
+    The scoring (min(user_commits, their_commits) with owner boost and multi-repo
+    weighting) happens in the fetcher so the widget just picks the top K.
     """
-    collaborators_data = github_data.get("collaborators_data", {})
+    scored = github_data.get("collaborators_data", [])
 
-    if not collaborators_data:
-        # Fallback to events-based if no collaborator data
+    # Fallback to events-based if collaborator scoring produced nothing
+    if not scored:
         return _compute_collaborators_from_events(github_data)
 
-    # Aggregate collaborators across all shared repos
-    collab_stats = defaultdict(lambda: {
-        "repos": set(),
-        "commits": 0,
-        "avatar_url": ""
-    })
-
-    for repo_name, contributors in collaborators_data.items():
-        for contributor in contributors:
-            login = contributor.get("login", "")
-            if login:
-                collab_stats[login]["repos"].add(repo_name)
-                collab_stats[login]["commits"] += contributor.get("contributions", 0)
-                if not collab_stats[login]["avatar_url"]:
-                    collab_stats[login]["avatar_url"] = contributor.get("avatar_url", "")
-
-    # Sort by total commits and take top 4
     collabs = []
-    for username, stats in sorted(
-        collab_stats.items(), key=lambda x: -x[1]["commits"]
-    )[:4]:  # Show exactly 4 collaborators
+    for s in scored[:5]:
         collabs.append(
             CollaboratorData(
-                username=username,
-                shared_repos=len(stats["repos"]),
-                shared_commits=stats["commits"],
-                avatar_b64="",  # Will be fetched if needed
+                username=s["login"],
+                shared_repos=s["shared_repos"],
+                shared_commits=int(round(s["raw_score"])),
+                avatar_b64="",
             )
         )
-
     return collabs
 
 
@@ -512,7 +492,8 @@ def generate_widgets_from_github(
     github_data: dict,
     theme: str = "dark",
     custom_tags: list[str] = None,
-    hidden_languages: list[str] = None
+    hidden_languages: list[str] = None,
+    enabled: list[str] = None,
 ) -> dict[str, str]:
     """
     Takes raw GitHub API data and returns rendered SVG strings
@@ -523,17 +504,35 @@ def generate_widgets_from_github(
         theme: Color theme name
         custom_tags: Optional list of custom tags to add to the grade widget
         hidden_languages: Optional list of languages to exclude from stats
+        enabled: Optional list of widget keys to generate; others are skipped.
+            Defaults to ENABLED_WIDGETS from config.
     """
-    grade = compute_grade(github_data, custom_tags=custom_tags)
-    impact = compute_impact_timeline(github_data)
-    collabs = compute_collaborators(github_data)
-    focus = compute_focus(github_data, hidden_languages=hidden_languages)
-    languages = compute_languages(github_data, hidden_languages=hidden_languages)
+    from ..config import ENABLED_WIDGETS
 
-    return {
-        "grade": render_grade_widget(grade, theme),
-        "impact": render_impact_widget(impact, theme),
-        "collaborators": render_collaborators_widget(collabs, theme),
-        "focus": render_focus_widget(focus, theme, period="1y"),
-        "languages": render_languages_widget(languages, theme),
-    }
+    if enabled is None:
+        enabled = ENABLED_WIDGETS
+    enabled_set = set(enabled)
+
+    widgets: dict[str, str] = {}
+
+    if "grade" in enabled_set:
+        grade = compute_grade(github_data, custom_tags=custom_tags)
+        widgets["grade"] = render_grade_widget(grade, theme)
+
+    if "impact" in enabled_set:
+        impact = compute_impact_timeline(github_data)
+        widgets["impact"] = render_impact_widget(impact, theme)
+
+    if "collaborators" in enabled_set:
+        collabs = compute_collaborators(github_data)
+        widgets["collaborators"] = render_collaborators_widget(collabs, theme)
+
+    if "focus" in enabled_set:
+        focus = compute_focus(github_data, hidden_languages=hidden_languages)
+        widgets["focus"] = render_focus_widget(focus, theme, period="1y")
+
+    if "languages" in enabled_set:
+        languages = compute_languages(github_data, hidden_languages=hidden_languages)
+        widgets["languages"] = render_languages_widget(languages, theme)
+
+    return widgets

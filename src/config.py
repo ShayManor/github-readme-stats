@@ -3,14 +3,33 @@
 import os
 
 # Collaborator settings
-COLLABORATOR_MIN_COMMITS = int(os.getenv("COLLABORATOR_MIN_COMMITS", "5"))
-"""Minimum commits in a shared repo to be considered a collaborator (lowered to 5 for better detection)."""
-
 COLLABORATOR_MAX_REPO_SIZE = int(os.getenv("COLLABORATOR_MAX_REPO_SIZE", "150"))
 """Maximum contributors in a repo to be included (filters out huge OSS projects)."""
 
-COLLABORATOR_TOP_REPOS = int(os.getenv("COLLABORATOR_TOP_REPOS", "8"))
-"""Number of user's top repos to check for collaborators (increased to find more collaborators)."""
+COLLABORATOR_TOP_REPOS = int(os.getenv("COLLABORATOR_TOP_REPOS", "30"))
+"""Safety cap on repos to scan for collaborators (ranked by user's own commit count)."""
+
+SMALL_OWNED_REPO_SIZE = int(os.getenv("SMALL_OWNED_REPO_SIZE", "10"))
+"""User-owned repos with at most this many contributors are treated as 'tight' projects —
+single-repo collaborators in them bypass MIN_SHARED_REPOS (captures hackathon/side-project partners)."""
+
+COLLABORATOR_LOOKBACK_DAYS = int(os.getenv("COLLABORATOR_LOOKBACK_DAYS", "365"))
+"""How far back to look for the user's commit activity (GraphQL contributionsCollection is capped at 1 year)."""
+
+MEANINGFUL_MIN_COMMITS = int(os.getenv("MEANINGFUL_MIN_COMMITS", "3"))
+"""Minimum commits the user must have in a repo for it to count as 'meaningful' (kills drive-by commits)."""
+
+FORK_MIN_COMMITS = int(os.getenv("FORK_MIN_COMMITS", "10"))
+"""For forks, require at least this many user commits — kills the 'forked a huge repo, made one commit' problem."""
+
+OWNER_BOOST = float(os.getenv("OWNER_BOOST", "1.5"))
+"""Multiplier applied to collaborator scores in repos the user owns."""
+
+MIN_SHARED_REPOS = int(os.getenv("MIN_SHARED_REPOS", "2"))
+"""A collaborator must share at least this many repos with the user — unless DEEP_COLLAB_THRESHOLD is hit."""
+
+DEEP_COLLAB_THRESHOLD = int(os.getenv("DEEP_COLLAB_THRESHOLD", "25"))
+"""Single-repo escape hatch: a collaborator with raw_score above this qualifies even with only one shared repo."""
 
 # Commit fetching settings
 COMMIT_MAX_REPOS = int(os.getenv("COMMIT_MAX_REPOS", "10"))

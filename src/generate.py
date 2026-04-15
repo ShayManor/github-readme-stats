@@ -71,10 +71,11 @@ def generate_full_widget(
         github_data,
         theme,
         custom_tags=custom_tags,
-        hidden_languages=hidden_languages
+        hidden_languages=hidden_languages,
+        enabled=enabled,
     )
 
-    if achievements:
+    if achievements and "achievements" in enabled:
         widgets["achievements"] = render_achievements_widget(
             achievements, theme
         )

@@ -5,9 +5,15 @@ import base64
 from typing import Optional, Protocol
 
 from ..config import (
-    COLLABORATOR_MIN_COMMITS,
     COLLABORATOR_MAX_REPO_SIZE,
     COLLABORATOR_TOP_REPOS,
+    COLLABORATOR_LOOKBACK_DAYS,
+    MEANINGFUL_MIN_COMMITS,
+    FORK_MIN_COMMITS,
+    OWNER_BOOST,
+    MIN_SHARED_REPOS,
+    DEEP_COLLAB_THRESHOLD,
+    SMALL_OWNED_REPO_SIZE,
     COMMIT_MAX_REPOS,
     COMMIT_PER_REPO,
     API_TIMEOUT,
@@ -45,6 +51,10 @@ class GitHubDataSource(Protocol):
         """Fetch contributors for a specific repository."""
         ...
 
+    def fetch_user_commit_repos(self, username: str, since_date: str) -> list:
+        """Fetch repos the user has committed to, with per-repo user commit counts."""
+        ...
+
     def fetch_avatar(self, avatar_url: str) -> str:
         """Fetch and encode avatar as base64."""
         ...
@@ -59,6 +69,43 @@ class DirectAPISource:
         if token:
             self.headers["Authorization"] = f"token {token}"
         self.base = "https://api.github.com"
+
+    def _graphql(self, query: str, variables: Optional[dict] = None) -> Optional[dict]:
+        """
+        Execute a GraphQL query against the GitHub API.
+
+        Returns the `data` block of the response, or None on any failure.
+        GraphQL requires a Bearer token, not `token ...`.
+        """
+        headers = {**self.headers, "Content-Type": "application/json"}
+        auth = headers.get("Authorization", "")
+        if auth.startswith("token "):
+            headers["Authorization"] = auth.replace("token ", "Bearer ", 1)
+
+        payload = {"query": query}
+        if variables is not None:
+            payload["variables"] = variables
+
+        try:
+            resp = requests.post(
+                "https://api.github.com/graphql",
+                json=payload,
+                headers=headers,
+                timeout=API_TIMEOUT,
+            )
+        except Exception as e:
+            print(f"  GraphQL request failed: {e}")
+            return None
+
+        if not resp.ok:
+            print(f"  GraphQL HTTP {resp.status_code}: {resp.text[:200]}")
+            return None
+
+        body = resp.json()
+        if "errors" in body:
+            print(f"  GraphQL errors: {body['errors']}")
+            return None
+        return body.get("data")
 
     def fetch_user_data(self, username: str) -> dict:
         """Fetch user profile data."""
@@ -396,6 +443,68 @@ class DirectAPISource:
 
         return []
 
+    def fetch_user_commit_repos(self, username: str, since_date: str) -> list:
+        """
+        Fetch all repos the user has committed to in the given window, with the
+        user's own commit count per repo — via one GraphQL call.
+
+        Args:
+            username: GitHub username
+            since_date: ISO date (YYYY-MM-DD) — start of lookback window
+
+        Returns:
+            List of dicts: [{full_name, is_fork, is_owner, user_commits, url}, ...]
+        """
+        from datetime import datetime
+
+        from_ts = f"{since_date}T00:00:00Z"
+        to_ts = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        query = """
+        query($username: String!, $from: DateTime!, $to: DateTime!) {
+          user(login: $username) {
+            contributionsCollection(from: $from, to: $to) {
+              commitContributionsByRepository(maxRepositories: 100) {
+                contributions { totalCount }
+                repository {
+                  nameWithOwner
+                  isFork
+                  url
+                  owner { login }
+                }
+              }
+            }
+          }
+        }
+        """
+
+        data = self._graphql(
+            query,
+            variables={"username": username, "from": from_ts, "to": to_ts},
+        )
+        if not data or not data.get("user"):
+            return []
+
+        out = []
+        contrib_repos = (
+            data["user"]["contributionsCollection"]["commitContributionsByRepository"]
+        )
+        for entry in contrib_repos:
+            repo = entry.get("repository") or {}
+            full_name = repo.get("nameWithOwner")
+            if not full_name:
+                continue
+            out.append({
+                "full_name": full_name,
+                "is_fork": bool(repo.get("isFork")),
+                "is_owner": (repo.get("owner") or {}).get("login", "").lower() == username.lower(),
+                "user_commits": entry.get("contributions", {}).get("totalCount", 0),
+                "url": repo.get("url", ""),
+            })
+
+        print(f"  GraphQL found {len(out)} repos user committed to (since {since_date})")
+        return out
+
     def fetch_avatar(self, avatar_url: str) -> str:
         """Fetch and encode avatar as base64."""
         try:
@@ -486,46 +595,125 @@ def _fetch_collaborators_data(
     username: str,
     repos: list,
     source: GitHubDataSource,
-) -> dict:
+) -> list:
     """
-    Fetch collaborator data from user's most active repositories.
+    Find meaningful collaborators using a user-weighted scoring model.
 
-    Uses config.COLLABORATOR_MIN_COMMITS threshold (default: 5) to filter
-    out casual contributors and focus on meaningful collaborations.
-
-    Args:
-        username: The user's GitHub username
-        repos: List of user's repositories
-        source: Data source to fetch from
+    Pipeline:
+      1. GraphQL: fetch repos the user has committed to in the last year, with
+         the user's own commit count in each.
+      2. Filter out forks unless the user has meaningful commits in them, and
+         drop repos with too few user commits overall.
+      3. For each surviving repo, REST-fetch contributors.
+      4. Score each contributor as min(user_commits, their_commits) — you can't
+         collaborate more than the smaller side contributed.
+      5. Apply owner boost, then rank by (raw_score * shared_repos).
+      6. Drop collaborators below the multi-repo / deep-collab floors.
 
     Returns:
-        Dict mapping repo names to their contributors
+        List of scored collaborators, sorted by final_score desc:
+        [{"login", "avatar_url", "raw_score", "shared_repos", "final_score", "repos"}, ...]
     """
-    # Use the user's most recently pushed repos
-    sorted_repos = sorted(
-        repos,
-        key=lambda r: r.get("pushed_at", ""),
-        reverse=True
-    )[:COLLABORATOR_TOP_REPOS]
+    from datetime import datetime, timedelta
 
-    collaborators_by_repo = {}
+    # Bots and automated accounts that show up as "contributors" but aren't collaborators.
+    BOT_LOGINS = {
+        "claude", "claude-code", "dependabot", "dependabot-preview",
+        "github-actions", "renovate", "renovate-bot", "imgbot",
+        "greenkeeper", "snyk-bot", "codecov",
+    }
 
-    for repo in sorted_repos:
-        repo_name = repo.get("full_name")
-        if not repo_name:
+    def _is_bot(login: str) -> bool:
+        low = login.lower()
+        return low in BOT_LOGINS or low.endswith("[bot]") or low.endswith("-bot")
+
+    since = (datetime.now() - timedelta(days=COLLABORATOR_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+    commit_repos = source.fetch_user_commit_repos(username, since)
+    if not commit_repos:
+        return []
+
+    # Step 2: filter by meaningful user activity
+    qualifying = []
+    for r in commit_repos:
+        user_commits = r.get("user_commits", 0)
+        if user_commits < MEANINGFUL_MIN_COMMITS:
+            continue
+        if r.get("is_fork") and user_commits < FORK_MIN_COMMITS:
+            continue
+        qualifying.append(r)
+
+    # Rank user's repos by their own commit count, scan top N
+    qualifying.sort(key=lambda r: -r.get("user_commits", 0))
+    qualifying = qualifying[:COLLABORATOR_TOP_REPOS]
+    print(f"  Scoring collaborators across {len(qualifying)} qualifying repos")
+
+    # Step 3+4: fetch contributors and score
+    collab_stats: dict = {}
+    for r in qualifying:
+        full_name = r["full_name"]
+        user_commits = r["user_commits"]
+        boost = OWNER_BOOST if r["is_owner"] else 1.0
+
+        contributors = source.fetch_repo_contributors(full_name, min_commits=1)
+        # Drop huge OSS projects
+        if len(contributors) >= COLLABORATOR_MAX_REPO_SIZE:
+            print(f"    skipping {full_name}: too many contributors ({len(contributors)})")
             continue
 
-        # Fetch contributors with at least COLLABORATOR_MIN_COMMITS
-        contributors = source.fetch_repo_contributors(repo_name, COLLABORATOR_MIN_COMMITS)
+        # A "tight" repo: one the user owns with few contributors — hackathon
+        # and side-project partners qualify from a single such repo.
+        is_tight_owned = r["is_owner"] and len(contributors) <= SMALL_OWNED_REPO_SIZE
 
-        # Filter out the user themselves
-        contributors = [
-            c for c in contributors
-            if c.get("login", "").lower() != username.lower()
-        ]
+        for c in contributors:
+            login = c.get("login", "")
+            if not login or login.lower() == username.lower() or _is_bot(login):
+                continue
+            their_commits = c.get("contributions", 0)
+            # Scoring:
+            # - Tight owned repo: their investment IS the collaboration signal
+            #   (partner poured commits into *your* project). Use their_commits.
+            # - Otherwise: min() prevents a prolific stranger in a large repo
+            #   from dominating based on work you weren't part of.
+            if is_tight_owned:
+                contribution = their_commits * boost
+            else:
+                contribution = min(user_commits, their_commits) * boost
 
-        # Skip repos with too many contributors (huge OSS projects)
-        if len(contributors) < COLLABORATOR_MAX_REPO_SIZE:
-            collaborators_by_repo[repo_name] = contributors
+            stat = collab_stats.setdefault(login, {
+                "login": login,
+                "avatar_url": c.get("avatar_url", ""),
+                "raw_score": 0.0,
+                "repos": [],
+                "tight_owned_partner": False,
+            })
+            stat["raw_score"] += contribution
+            stat["repos"].append(full_name)
+            if is_tight_owned:
+                stat["tight_owned_partner"] = True
+            if not stat["avatar_url"]:
+                stat["avatar_url"] = c.get("avatar_url", "")
 
-    return collaborators_by_repo
+    # Step 5: composite score rewards multi-repo presence
+    scored = []
+    for stat in collab_stats.values():
+        shared = len(stat["repos"])
+        stat["shared_repos"] = shared
+        stat["final_score"] = stat["raw_score"] * shared
+        scored.append(stat)
+
+    # Step 6: qualification floor — either multi-repo, deep single-repo,
+    # or a partner in a tight user-owned project (hackathon/side-project).
+    filtered = [
+        s for s in scored
+        if s["shared_repos"] >= MIN_SHARED_REPOS
+        or s["raw_score"] >= DEEP_COLLAB_THRESHOLD
+        or s["tight_owned_partner"]
+    ]
+
+    filtered.sort(key=lambda s: -s["final_score"])
+
+    print(f"  Found {len(filtered)} collaborators after filtering ({len(scored)} before)")
+    for s in filtered[:6]:
+        print(f"    {s['login']}: final={s['final_score']:.0f} raw={s['raw_score']:.0f} repos={s['shared_repos']}")
+
+    return filtered
