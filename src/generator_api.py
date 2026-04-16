@@ -19,7 +19,8 @@ from flask import Flask, jsonify, request, Response
 
 from .db import init_db, get_user, DUMMY_USERNAME, REQUIRED_FIELDS
 from .data.processor import generate_widgets_from_github
-from .widgets import compose_widget
+from .models import AchievementData
+from .widgets import compose_widget, render_achievements_widget
 from .config import ENABLED_WIDGETS, WIDGET_ORDER
 
 
@@ -58,6 +59,7 @@ def generate():
     widget_order = body.get("widget_order") or WIDGET_ORDER
     custom_tags = body.get("custom_tags")
     hidden_languages = body.get("hidden_languages")
+    achievements_raw = body.get("achievements") or []
     fmt = body.get("format", "svg")
 
     github_data, used_dummy = _load_with_fallback(username)
@@ -69,6 +71,21 @@ def generate():
         hidden_languages=hidden_languages,
         enabled=enabled,
     )
+
+    # Render achievements if provided and enabled
+    if "achievements" in enabled and achievements_raw:
+        achs = [
+            AchievementData(
+                title=a.get("title", ""),
+                subtitle=a.get("subtitle", ""),
+                event_date=a.get("event_date", ""),
+                icon=a.get("icon", "trophy"),
+            )
+            for a in achievements_raw
+            if a.get("title")
+        ]
+        if achs:
+            widgets["achievements"] = render_achievements_widget(achs, theme)
 
     ordered = [w for w in widget_order if w in enabled and w in widgets and widgets[w]]
     display_name = username if not used_dummy else username

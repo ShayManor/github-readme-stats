@@ -1,7 +1,8 @@
 """Theme definitions and color palettes."""
 
 THEMES = {
-    "dark": {
+    # --- Dark themes ---
+    "dark": {  # kept for backwards compat; "midnight" is the alias
         "bg": "#121820",
         "card_bg": "#1a2230",
         "card_border": "#2a3444",
@@ -15,7 +16,36 @@ THEMES = {
         "pink": "#f778ba",
         "grid": "#1e2836",
     },
-    "light": {
+    "onyx": {  # high-contrast neon on pure black
+        "bg": "#09090b",
+        "card_bg": "#18181b",
+        "card_border": "#27272a",
+        "text": "#fafafa",
+        "text_secondary": "#a1a1aa",
+        "accent": "#a78bfa",
+        "green": "#4ade80",
+        "orange": "#fb923c",
+        "red": "#f87171",
+        "purple": "#c084fc",
+        "pink": "#f472b6",
+        "grid": "#27272a",
+    },
+    "nord": {  # muted pastel on slate-blue — clearly cooler
+        "bg": "#1e2433",
+        "card_bg": "#2a3142",
+        "card_border": "#3d4659",
+        "text": "#e5e9f0",
+        "text_secondary": "#8892a4",
+        "accent": "#88c0d0",
+        "green": "#a3be8c",
+        "orange": "#ebcb8b",
+        "red": "#bf616a",
+        "purple": "#b48ead",
+        "pink": "#d08770",
+        "grid": "#333d50",
+    },
+    # --- Light themes ---
+    "light": {  # kept for backwards compat; "clean" is the alias
         "bg": "#ffffff",
         "card_bg": "#f6f8fa",
         "card_border": "#d8dee4",
@@ -29,7 +59,25 @@ THEMES = {
         "pink": "#bf3989",
         "grid": "#eaeef2",
     },
+    "paper": {
+        "bg": "#faf8f5",
+        "card_bg": "#f5f0eb",
+        "card_border": "#e0d8cf",
+        "text": "#3d3529",
+        "text_secondary": "#7a7062",
+        "accent": "#b45309",
+        "green": "#4d7c0f",
+        "orange": "#a16207",
+        "red": "#b91c1c",
+        "purple": "#7e22ce",
+        "pink": "#be185d",
+        "grid": "#ebe5dd",
+    },
 }
+
+# Aliases so the frontend can use friendly names
+THEMES["midnight"] = THEMES["dark"]
+THEMES["clean"] = THEMES["light"]
 
 TAG_COLORS = {
     "ml-engineer": "#bc8cff",

@@ -8,12 +8,24 @@ from ..utils import card_wrapper
 def render_impact_widget(weeks: list[ImpactWeek], theme_name: str = "dark", period: str = "6mo") -> str:
     """Renders the impact timeline chart widget."""
     t = THEMES[theme_name]
-    if not weeks:
-        return ""
-
     w, h = 380, 200
     chart_x, chart_y = 40, 8
     chart_w, chart_h = 316, 82
+
+    if not weeks:
+        # Render an empty chart so the widget still appears
+        inner = f'''
+    <line x1="{chart_x}" y1="{chart_y + chart_h}" x2="{chart_x + chart_w}" y2="{chart_y + chart_h}" stroke="{t["grid"]}" stroke-width="0.5"/>
+    <text x="{chart_x + chart_w / 2}" y="{chart_y + chart_h / 2 + 4}" text-anchor="middle"
+          font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="11" fill="{t["text_secondary"]}">No contribution data yet</text>
+    <g transform="translate(20, {chart_y + chart_h + 46})">
+      <text x="0" y="0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="700" fill="{t["text"]}">0</text>
+      <text x="0" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="9" fill="{t["text_secondary"]}">commits over {period}</text>
+    </g>'''
+        return card_wrapper(inner, w, h, t, "Impact Timeline")
 
     max_commits = max((wk.commits for wk in weeks), default=1) or 1
     n = len(weeks)
