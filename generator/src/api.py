@@ -28,9 +28,11 @@ def require_auth(fn):
 def spa(path: str):
     if path.startswith("api/"):
         return jsonify({"error": "not found"}), 404
-    full = os.path.join(_STATIC_DIR, path) if path else os.path.join(_STATIC_DIR, "index.html")
-    if path and os.path.isfile(full):
-        return send_from_directory(_STATIC_DIR, path)
+    if path:
+        try:
+            return send_from_directory(_STATIC_DIR, path)
+        except Exception:
+            pass
     index = os.path.join(_STATIC_DIR, "index.html")
     if os.path.isfile(index):
         return send_from_directory(_STATIC_DIR, "index.html")
@@ -113,10 +115,11 @@ def get_settings(username: str):
 @app.route("/api/<username>/settings", methods=["PATCH"])
 @require_auth
 def patch_settings(username: str):
-    if db.get_settings(username) is None:
+    current = db.get_settings(username)
+    if current is None:
         return jsonify({"error": "not_enrolled"}), 404
     body = request.get_json(silent=True) or {}
-    merged = {**db.get_settings(username)["settings"], **body}
+    merged = {**current["settings"], **body}
     job_id = db.update_settings(username, merged)
     return jsonify({"updated": True, "job_id": job_id})
 
