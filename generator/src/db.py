@@ -230,7 +230,8 @@ def claim_next_job() -> Optional[dict]:
         c.execute("UPDATE jobs SET status='running', updated_at=?, attempts=attempts+1 WHERE id=?",
                   (now, row["id"]))
         c.commit()
-        return {"id": row["id"], "username": row["username"], "kind": row["kind"], "status": "running"}
+        return {"id": row["id"], "username": row["username"], "kind": row["kind"],
+                "status": "running", "attempts": row["attempts"] + 1}
 
 
 def complete_job(job_id: int) -> None:
