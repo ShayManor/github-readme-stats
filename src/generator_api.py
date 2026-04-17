@@ -99,6 +99,34 @@ def generate():
         avatar_b64=github_data.get("avatar_b64", ""),
     )
 
+    if fmt == "data":
+        # Return raw computed data for client-side rendering
+        from .data.processor import (
+            compute_grade, compute_impact_timeline,
+            compute_collaborators, compute_focus, compute_languages,
+        )
+        raw = {}
+        if "grade" in enabled:
+            g = compute_grade(github_data, custom_tags=custom_tags)
+            raw["grade"] = {"grade": g.grade, "score": g.score, "stats": g.stats,
+                            "tags": [{"tag": t.tag, "source": t.source, "confidence": t.confidence} for t in g.tags],
+                            "breakdown": g.breakdown}
+        if "impact" in enabled:
+            raw["impact"] = [{"week_start": w.week_start, "commits": w.commits}
+                             for w in compute_impact_timeline(github_data)]
+        if "collaborators" in enabled:
+            raw["collaborators"] = [{"username": c.username, "shared_repos": c.shared_repos,
+                                     "shared_commits": c.shared_commits}
+                                    for c in compute_collaborators(github_data)]
+        if "focus" in enabled:
+            raw["focus"] = [{"category": f.category, "percentage": f.percentage,
+                             "commit_count": f.commit_count}
+                            for f in compute_focus(github_data, hidden_languages=hidden_languages)]
+        if "languages" in enabled:
+            raw["languages"] = [{"language": l.language, "percentage": l.percentage, "loc": l.loc}
+                                for l in compute_languages(github_data, hidden_languages=hidden_languages)]
+        return jsonify({"username": username, "used_dummy": used_dummy, "data": raw})
+
     if fmt == "json":
         return jsonify({
             "username": username,
