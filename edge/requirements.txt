@@ -1,0 +1,7 @@
+flask==3.0.3
+flask-caching==2.3.0
+flask-compress==1.15
+requests==2.32.3
+pytest==8.3.3
+responses==0.25.3
+gunicorn==23.0.0
