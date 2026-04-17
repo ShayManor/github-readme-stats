@@ -6,9 +6,22 @@ from ..themes import THEMES, TAG_COLORS, GRADE_COLORS
 from ..utils import escape, card_wrapper, icon_svg
 
 
-def render_grade_widget(data: GradeData, theme_name: str = "dark") -> str:
-    """Renders the developer grade widget with stats and tags."""
+def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dict | None = None) -> str:
+    """Renders the developer grade widget with stats and tags.
+
+    Settings:
+        max_tags (int): Max tags to display (default all)
+    """
     t = THEMES[theme_name]
+    s = settings or {}
+    max_tags = s.get("max_tags")
+    if max_tags is not None:
+        max_tags = min(max(int(max_tags), 1), 20)
+        data = GradeData(
+            grade=data.grade, score=data.score, stats=data.stats,
+            tags=data.tags[:max_tags] if data.tags else [],
+            breakdown=data.breakdown,
+        )
     base = data.grade[0]
     color = GRADE_COLORS.get(base, t["accent"])
     score = data.score

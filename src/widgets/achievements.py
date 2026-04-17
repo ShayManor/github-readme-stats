@@ -32,10 +32,17 @@ def _achievement_icon_svg(icon_type: str, color: str) -> str:
 def render_achievements_widget(
     achievements: list[AchievementData],
     theme_name: str = "dark",
-    max_items: int = 5
+    max_items: int = 5,
+    settings: dict | None = None,
 ) -> str:
-    """Renders the achievements widget with icons and descriptions."""
+    """Renders the achievements widget with icons and descriptions.
+
+    Settings:
+        max_items (int): Max achievements to show (default 5)
+    """
     t = THEMES[theme_name]
+    s = settings or {}
+    max_items = min(max(int(s.get("max_items", max_items)), 1), 10)
     items = ""
     accent_colors = [t["orange"], t["green"], t["accent"], t["purple"], t["pink"]]
 

@@ -60,6 +60,7 @@ def generate():
     custom_tags = body.get("custom_tags")
     hidden_languages = body.get("hidden_languages")
     achievements_raw = body.get("achievements") or []
+    widget_settings = body.get("widget_settings") or {}
     fmt = body.get("format", "svg")
 
     github_data, used_dummy = _load_with_fallback(username)
@@ -70,6 +71,7 @@ def generate():
         custom_tags=custom_tags,
         hidden_languages=hidden_languages,
         enabled=enabled,
+        widget_settings=widget_settings,
     )
 
     # Render achievements if provided and enabled
@@ -85,7 +87,7 @@ def generate():
             if a.get("title")
         ]
         if achs:
-            widgets["achievements"] = render_achievements_widget(achs, theme)
+            widgets["achievements"] = render_achievements_widget(achs, theme, settings=widget_settings.get("achievements"))
 
     ordered = [w for w in widget_order if w in enabled and w in widgets and widgets[w]]
     display_name = username if not used_dummy else username

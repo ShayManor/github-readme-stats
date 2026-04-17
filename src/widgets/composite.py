@@ -1,9 +1,37 @@
 """Composite widget builder for combining multiple widgets."""
 
 import re
-import base64
 from ..themes import THEMES
 from ..utils import escape
+
+
+def _extract_inner(svg: str, widget_key: str) -> tuple[str, int]:
+    """Extract the inner content from a widget SVG and rewrite IDs to be unique.
+
+    Returns (inner_svg_content, height).
+    """
+    # Parse height
+    hm = re.search(r'height="(\d+)"', svg)
+    h = int(hm.group(1)) if hm else 160
+
+    # Rewrite IDs to avoid conflicts: shadow, avatarClip, areaGrad, etc.
+    # Prefix all id="..." and url(#...) and href="#..." references
+    prefix = f"{widget_key}_"
+
+    # Find all IDs in the SVG
+    ids = re.findall(r'id="([^"]+)"', svg)
+    inner = svg
+    for old_id in ids:
+        new_id = f"{prefix}{old_id}"
+        inner = inner.replace(f'id="{old_id}"', f'id="{new_id}"')
+        inner = inner.replace(f'url(#{old_id})', f'url(#{new_id})')
+        inner = inner.replace(f'href="#{old_id}"', f'href="#{new_id}"')
+
+    # Strip the outer <svg> and </svg> tags to get just the content
+    inner = re.sub(r'<svg[^>]*>', '', inner, count=1)
+    inner = re.sub(r'</svg>\s*$', '', inner)
+
+    return inner, h
 
 
 def compose_widget(
@@ -15,7 +43,7 @@ def compose_widget(
 ) -> str:
     """
     Takes rendered SVG strings for each widget type and composes them
-    into a single unified profile widget.
+    into a single unified profile widget by inlining widget SVGs directly.
     """
     t = THEMES[theme_name]
     total_w = 420
@@ -23,14 +51,12 @@ def compose_widget(
     padding = 20
     gap = 16
 
-    # Parse each widget's height from its SVG
+    # Extract inner content from each widget SVG
     parts = []
     for key in enabled:
         if key in widgets and widgets[key]:
-            svg = widgets[key]
-            hm = re.search(r'height="(\d+)"', svg)
-            h = int(hm.group(1)) if hm else 160
-            parts.append((key, svg, h))
+            inner, h = _extract_inner(widgets[key], key)
+            parts.append((key, inner, h))
 
     content_h = sum(h for _, _, h in parts) + gap * max(len(parts) - 1, 0)
     total_h = header_h + content_h + padding * 2 + 10
@@ -51,14 +77,14 @@ def compose_widget(
     <line x1="{padding}" y1="{header_h}" x2="{total_w - padding}" y2="{header_h}"
           stroke="{t["card_border"]}" stroke-width="0.5"/>'''
 
-    # Stack widgets via base64 data URI embedding
+    # Inline widgets using <svg> sub-documents positioned with x/y
     y_offset = header_h + padding
     embedded = ""
-    for key, svg, h in parts:
-        svg_b64 = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+    for key, inner, h in parts:
         embedded += f'''
-    <image x="{padding}" y="{y_offset}" width="380" height="{h}"
-           href="data:image/svg+xml;base64,{svg_b64}"/>'''
+    <svg x="{padding}" y="{y_offset}" width="380" height="{h}" viewBox="0 0 380 {h}">
+      {inner}
+    </svg>'''
         y_offset += h + gap
 
     return f'''<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"

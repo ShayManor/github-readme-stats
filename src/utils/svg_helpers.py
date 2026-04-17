@@ -6,17 +6,24 @@ def escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
-def card_wrapper(inner_svg: str, width: int, height: int, theme: dict, title: str = "") -> str:
-    """Wraps content in a styled card with rounded corners and border."""
+def card_wrapper(inner_svg: str, width: int, height: int, theme: dict, title: str = "", id_prefix: str = "") -> str:
+    """Wraps content in a styled card with rounded corners and border.
+
+    Args:
+        id_prefix: Optional prefix for SVG IDs to avoid conflicts when
+                   multiple widgets are inlined in the same document.
+    """
+    shadow_id = f"{id_prefix}shadow" if id_prefix else "shadow"
+    clip_id = f"{id_prefix}avatarClip" if id_prefix else "avatarClip"
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" fill="none">
   <defs>
-    <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
+    <filter id="{shadow_id}" x="-2%" y="-2%" width="104%" height="104%">
       <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.15"/>
     </filter>
-    <clipPath id="avatarClip"><circle cx="0" cy="0" r="18"/></clipPath>
+    <clipPath id="{clip_id}"><circle cx="0" cy="0" r="18"/></clipPath>
   </defs>
   <rect x="1" y="1" width="{width-2}" height="{height-2}" rx="10" ry="10"
-        fill="{theme["card_bg"]}" stroke="{theme["card_border"]}" stroke-width="1" filter="url(#shadow)"/>
+        fill="{theme["card_bg"]}" stroke="{theme["card_border"]}" stroke-width="1" filter="url(#{shadow_id})"/>
   {f'<text x="20" y="30" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="{theme["text_secondary"]}" letter-spacing="0.8" opacity="0.7">{escape(title.upper())}</text>' if title else ''}
   <g transform="translate(0, {36 if title else 0})">
     {inner_svg}

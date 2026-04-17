@@ -5,9 +5,15 @@ from ..themes import THEMES
 from ..utils import card_wrapper
 
 
-def render_impact_widget(weeks: list[ImpactWeek], theme_name: str = "dark", period: str = "6mo") -> str:
-    """Renders the impact timeline chart widget."""
+def render_impact_widget(weeks: list[ImpactWeek], theme_name: str = "dark", period: str = "6mo", settings: dict | None = None) -> str:
+    """Renders the impact timeline chart widget.
+
+    Settings:
+        line_color (str): Hex color for the chart line/area (default theme accent)
+    """
     t = THEMES[theme_name]
+    s = settings or {}
+    line_color = s.get("line_color") or t["accent"]
     w, h = 380, 200
     chart_x, chart_y = 40, 8
     chart_w, chart_h = 316, 82
@@ -71,14 +77,14 @@ def render_impact_widget(weeks: list[ImpactWeek], theme_name: str = "dark", peri
     inner = f'''
     <defs>
       <linearGradient id="areaGrad" x1="0" y1="{chart_y}" x2="0" y2="{chart_y + chart_h}" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stop-color="{t["accent"]}" stop-opacity="0.35"/>
-        <stop offset="100%" stop-color="{t["accent"]}" stop-opacity="0.02"/>
+        <stop offset="0%" stop-color="{line_color}" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="{line_color}" stop-opacity="0.02"/>
       </linearGradient>
     </defs>
     {y_labels}
     {x_labels}
     <path d="{area_d}" fill="url(#areaGrad)"/>
-    <path d="{path_d}" fill="none" stroke="{t["accent"]}" stroke-width="2" stroke-linecap="round"/>
+    <path d="{path_d}" fill="none" stroke="{line_color}" stroke-width="2" stroke-linecap="round"/>
     <g transform="translate(20, {summary_y})">
       <text x="0" y="0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
             font-size="13" font-weight="700" fill="{t["text"]}">{total:,}</text>

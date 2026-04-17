@@ -6,10 +6,16 @@ from ..themes import THEMES, LANG_COLORS, FOCUS_COLORS
 from ..utils import escape, card_wrapper
 
 
-def render_languages_widget(languages: list[LanguageData], theme_name: str = "dark") -> str:
-    """Renders the languages donut chart widget."""
+def render_languages_widget(languages: list[LanguageData], theme_name: str = "dark", settings: dict | None = None) -> str:
+    """Renders the languages donut chart widget.
+
+    Settings:
+        max_languages (int): Max languages to show (default 5)
+    """
     t = THEMES[theme_name]
-    top_langs = sorted(languages, key=lambda l: -l.percentage)[:5]
+    s = settings or {}
+    max_langs = min(max(int(s.get("max_languages", 5)), 1), 10)
+    top_langs = sorted(languages, key=lambda l: -l.percentage)[:max_langs]
     if not top_langs:
         return ""
 
@@ -18,7 +24,7 @@ def render_languages_widget(languages: list[LanguageData], theme_name: str = "da
     langs = list(top_langs)
 
     # Add "Other" category if there are remaining languages
-    if total_percentage < 99.9 and len(languages) > 5:
+    if total_percentage < 99.9 and len(languages) > max_langs:
         other_percentage = 100 - total_percentage
         from ..models import LanguageData
         langs.append(LanguageData(
@@ -27,7 +33,7 @@ def render_languages_widget(languages: list[LanguageData], theme_name: str = "da
             loc=0
         ))
     elif total_percentage < 99.9:
-        # If we have <= 5 languages total but they don't sum to 100%,
+        # If we have <= max_langs languages total but they don't sum to 100%,
         # adjust the percentages proportionally to sum to 100%
         if total_percentage > 0:
             factor = 100 / total_percentage

@@ -5,12 +5,20 @@ from ..themes import THEMES
 from ..utils import escape, card_wrapper
 
 
-def render_collaborators_widget(collabs: list[CollaboratorData], theme_name: str = "dark") -> str:
-    """Renders the top collaborators widget with avatars and contribution bars."""
+def render_collaborators_widget(collabs: list[CollaboratorData], theme_name: str = "dark", settings: dict | None = None) -> str:
+    """Renders the top collaborators widget with avatars and contribution bars.
+
+    Settings:
+        max_count (int): Number of collaborators to show (default 5)
+        bar_color (str): Hex color for the contribution bars (default theme purple)
+    """
     t = THEMES[theme_name]
+    s = settings or {}
+    max_count = min(max(int(s.get("max_count", 5)), 1), 10)
+    bar_color = s.get("bar_color") or t["purple"]
     items = ""
 
-    for i, c in enumerate(collabs[:5]):
+    for i, c in enumerate(collabs[:max_count]):
         y = i * 50
         avatar_el = ""
 
@@ -24,7 +32,7 @@ def render_collaborators_widget(collabs: list[CollaboratorData], theme_name: str
                   font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
                   font-size="14" font-weight="600" fill="white">{escape(c.username[0].upper())}</text>'''
 
-        bar_max = max((x.shared_commits for x in collabs[:5]), default=1) or 1
+        bar_max = max((x.shared_commits for x in collabs[:max_count]), default=1) or 1
         bar_w = c.shared_commits / bar_max * 120
 
         items += f'''
@@ -35,10 +43,10 @@ def render_collaborators_widget(collabs: list[CollaboratorData], theme_name: str
       <text x="28" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
             font-size="10" fill="{t["text_secondary"]}">{c.shared_repos} repos · {c.shared_commits} commits</text>
       <rect x="200" y="-6" width="130" height="8" rx="4" fill="{t["grid"]}"/>
-      <rect x="200" y="-6" width="{bar_w}" height="8" rx="4" fill="{t["purple"]}" opacity="0.8">
+      <rect x="200" y="-6" width="{bar_w}" height="8" rx="4" fill="{bar_color}" opacity="0.8">
         <animate attributeName="width" from="0" to="{bar_w}" dur="0.6s" fill="freeze"/>
       </rect>
     </g>'''
 
-    total_h = len(collabs[:5]) * 50 + 48
+    total_h = len(collabs[:max_count]) * 50 + 48
     return card_wrapper(items, 380, total_h, t, "Top Collaborators")

@@ -5,10 +5,16 @@ from ..themes import THEMES, FOCUS_COLORS
 from ..utils import escape, card_wrapper
 
 
-def render_focus_widget(categories: list[FocusCategory], theme_name: str = "dark", period: str = "1y") -> str:
-    """Renders the focus areas widget with horizontal bars."""
+def render_focus_widget(categories: list[FocusCategory], theme_name: str = "dark", period: str = "1y", settings: dict | None = None) -> str:
+    """Renders the focus areas widget with horizontal bars.
+
+    Settings:
+        max_categories (int): Max categories to show (default 6)
+    """
     t = THEMES[theme_name]
-    cats = sorted(categories, key=lambda c: -c.percentage)[:6]
+    s = settings or {}
+    max_cats = min(max(int(s.get("max_categories", 6)), 1), 10)
+    cats = sorted(categories, key=lambda c: -c.percentage)[:max_cats]
     if not cats:
         return ""
 
