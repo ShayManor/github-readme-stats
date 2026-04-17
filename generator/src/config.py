@@ -103,3 +103,15 @@ TAG_TOPIC_MAP = {
     "gcp": "Cloud",
 }
 """Map repository topics to developer role categories."""
+
+# --- Service-specific additions (v2 of config) ---
+
+PORT = int(os.getenv("GENERATOR_PORT", "5002"))
+SETTINGS_DB_PATH = os.getenv("GENERATOR_SETTINGS_DB_PATH", "./data/settings.db")
+WIDGETS_DB_PATH = os.getenv("GENERATOR_WIDGETS_DB_PATH", "./data/widgets.db")
+FETCHER_URL = os.getenv("FETCHER_URL", "http://localhost:5001")
+FETCHER_INTERNAL_TOKEN = os.getenv("FETCHER_INTERNAL_TOKEN", "")
+REDIS_URL = os.getenv("REDIS_URL", "")
+ENROLLMENT_DAILY_CAP = int(os.getenv("ENROLLMENT_DAILY_CAP", "50"))
+WIDGET_LRU_PER_USER = int(os.getenv("WIDGET_LRU_PER_USER", "10"))
+POLL_INTERVAL_MINUTES = int(os.getenv("GENERATOR_POLL_INTERVAL_MINUTES", "15"))

@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-from ..models import (
+from .models import (
     GradeData,
     TagData,
     ImpactWeek,
@@ -11,7 +11,7 @@ from ..models import (
     FocusCategory,
     LanguageData,
 )
-from ..widgets import (
+from .widgets import (
     render_grade_widget,
     render_impact_widget,
     render_collaborators_widget,
@@ -150,7 +150,7 @@ def _compute_tags(github_data: dict, max_tags: int = None, custom_tags: list[str
     Returns:
         List of TagData objects with inferred developer roles
     """
-    from ..config import TAG_MAX_COUNT, TAG_LANGUAGE_MAP, TAG_TOPIC_MAP, HIDDEN_LANGUAGES
+    from .config import TAG_MAX_COUNT, TAG_LANGUAGE_MAP, TAG_TOPIC_MAP, HIDDEN_LANGUAGES
 
     if max_tags is None:
         max_tags = TAG_MAX_COUNT
@@ -372,7 +372,7 @@ def compute_focus(github_data: dict, hidden_languages: list[str] = None) -> list
         github_data: GitHub profile data
         hidden_languages: Optional list of languages to exclude
     """
-    from ..config import HIDDEN_LANGUAGES
+    from .config import HIDDEN_LANGUAGES
 
     if hidden_languages is None:
         hidden_languages = HIDDEN_LANGUAGES
@@ -465,7 +465,7 @@ def compute_languages(github_data: dict, hidden_languages: list[str] = None) -> 
         github_data: GitHub profile data
         hidden_languages: Optional list of languages to exclude (e.g., ["HTML", "CSS"])
     """
-    from ..config import HIDDEN_LANGUAGES
+    from .config import HIDDEN_LANGUAGES
 
     if hidden_languages is None:
         hidden_languages = HIDDEN_LANGUAGES
@@ -510,7 +510,7 @@ def generate_widgets_from_github(
         widget_settings: Optional per-widget settings dict, keyed by widget name.
             Each value is a dict of settings for that widget's renderer.
     """
-    from ..config import ENABLED_WIDGETS
+    from .config import ENABLED_WIDGETS
 
     if enabled is None:
         enabled = ENABLED_WIDGETS
