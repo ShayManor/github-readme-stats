@@ -4,20 +4,7 @@ import requests
 import base64
 from typing import Optional, Protocol
 
-from ..config import (
-    COLLABORATOR_MAX_REPO_SIZE,
-    COLLABORATOR_TOP_REPOS,
-    COLLABORATOR_LOOKBACK_DAYS,
-    MEANINGFUL_MIN_COMMITS,
-    FORK_MIN_COMMITS,
-    OWNER_BOOST,
-    MIN_SHARED_REPOS,
-    DEEP_COLLAB_THRESHOLD,
-    SMALL_OWNED_REPO_SIZE,
-    COMMIT_MAX_REPOS,
-    COMMIT_PER_REPO,
-    API_TIMEOUT,
-)
+from . import config
 
 
 class GitHubDataSource(Protocol):
@@ -91,7 +78,7 @@ class DirectAPISource:
                 "https://api.github.com/graphql",
                 json=payload,
                 headers=headers,
-                timeout=API_TIMEOUT,
+                timeout=config.API_TIMEOUT,
             )
         except Exception as e:
             print(f"  GraphQL request failed: {e}")
@@ -203,7 +190,7 @@ class DirectAPISource:
                 'https://api.github.com/graphql',
                 json={'query': query},
                 headers=headers,
-                timeout=API_TIMEOUT
+                timeout=config.API_TIMEOUT
             )
 
             if not resp.ok:
@@ -287,7 +274,7 @@ class DirectAPISource:
             'https://api.github.com/graphql',
             json={'query': query, 'variables': {'username': username}},
             headers=headers,
-            timeout=API_TIMEOUT
+            timeout=config.API_TIMEOUT
         )
 
         if not resp.ok or 'data' not in resp.json():
@@ -322,7 +309,7 @@ class DirectAPISource:
                 'https://api.github.com/graphql',
                 json={'query': year_query},
                 headers=headers,
-                timeout=API_TIMEOUT
+                timeout=config.API_TIMEOUT
             )
 
             if year_resp.ok:
@@ -371,7 +358,7 @@ class DirectAPISource:
             'https://api.github.com/graphql',
             json={'query': query},
             headers=headers,
-            timeout=API_TIMEOUT
+            timeout=config.API_TIMEOUT
         )
 
         if resp.ok:
@@ -401,7 +388,7 @@ class DirectAPISource:
                 f"{self.base}/search/issues",
                 headers=self.headers,
                 params={"q": query, "per_page": 1},
-                timeout=API_TIMEOUT
+                timeout=config.API_TIMEOUT
             )
 
             if resp.ok:
@@ -428,7 +415,7 @@ class DirectAPISource:
                 f"{self.base}/repos/{repo_name}/contributors",
                 headers=self.headers,
                 params={"per_page": 100},
-                timeout=API_TIMEOUT
+                timeout=config.API_TIMEOUT
             )
 
             if resp.ok:
@@ -508,7 +495,7 @@ class DirectAPISource:
     def fetch_avatar(self, avatar_url: str) -> str:
         """Fetch and encode avatar as base64."""
         try:
-            resp = requests.get(avatar_url + "&s=64", timeout=API_TIMEOUT)
+            resp = requests.get(avatar_url + "&s=64", timeout=config.API_TIMEOUT)
             if resp.ok:
                 return base64.b64encode(resp.content).decode("ascii")
         except Exception:
@@ -627,7 +614,7 @@ def _fetch_collaborators_data(
         low = login.lower()
         return low in BOT_LOGINS or low.endswith("[bot]") or low.endswith("-bot")
 
-    since = (datetime.now() - timedelta(days=COLLABORATOR_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+    since = (datetime.now() - timedelta(days=config.COLLABORATOR_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
     commit_repos = source.fetch_user_commit_repos(username, since)
     if not commit_repos:
         return []
@@ -636,15 +623,15 @@ def _fetch_collaborators_data(
     qualifying = []
     for r in commit_repos:
         user_commits = r.get("user_commits", 0)
-        if user_commits < MEANINGFUL_MIN_COMMITS:
+        if user_commits < config.MEANINGFUL_MIN_COMMITS:
             continue
-        if r.get("is_fork") and user_commits < FORK_MIN_COMMITS:
+        if r.get("is_fork") and user_commits < config.FORK_MIN_COMMITS:
             continue
         qualifying.append(r)
 
     # Rank user's repos by their own commit count, scan top N
     qualifying.sort(key=lambda r: -r.get("user_commits", 0))
-    qualifying = qualifying[:COLLABORATOR_TOP_REPOS]
+    qualifying = qualifying[:config.COLLABORATOR_TOP_REPOS]
     print(f"  Scoring collaborators across {len(qualifying)} qualifying repos")
 
     # Step 3+4: fetch contributors and score
@@ -652,17 +639,17 @@ def _fetch_collaborators_data(
     for r in qualifying:
         full_name = r["full_name"]
         user_commits = r["user_commits"]
-        boost = OWNER_BOOST if r["is_owner"] else 1.0
+        boost = config.OWNER_BOOST if r["is_owner"] else 1.0
 
         contributors = source.fetch_repo_contributors(full_name, min_commits=1)
         # Drop huge OSS projects
-        if len(contributors) >= COLLABORATOR_MAX_REPO_SIZE:
+        if len(contributors) >= config.COLLABORATOR_MAX_REPO_SIZE:
             print(f"    skipping {full_name}: too many contributors ({len(contributors)})")
             continue
 
         # A "tight" repo: one the user owns with few contributors — hackathon
         # and side-project partners qualify from a single such repo.
-        is_tight_owned = r["is_owner"] and len(contributors) <= SMALL_OWNED_REPO_SIZE
+        is_tight_owned = r["is_owner"] and len(contributors) <= config.SMALL_OWNED_REPO_SIZE
 
         for c in contributors:
             login = c.get("login", "")
@@ -705,8 +692,8 @@ def _fetch_collaborators_data(
     # or a partner in a tight user-owned project (hackathon/side-project).
     filtered = [
         s for s in scored
-        if s["shared_repos"] >= MIN_SHARED_REPOS
-        or s["raw_score"] >= DEEP_COLLAB_THRESHOLD
+        if s["shared_repos"] >= config.MIN_SHARED_REPOS
+        or s["raw_score"] >= config.DEEP_COLLAB_THRESHOLD
         or s["tight_owned_partner"]
     ]
 
