@@ -227,3 +227,10 @@ generator/frontend/node_modules/
 # Widget build artifacts at repo root (retired)
 /widget_*.svg
 /data/ghstats.db
+
+# Editor / tooling caches
+.idea/
+.claude/
+.superpowers/
+.playwright-mcp/
+screenshots/
