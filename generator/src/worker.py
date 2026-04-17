@@ -4,7 +4,6 @@ Run as its own container: CMD python -m src.worker
 """
 import logging
 import time
-from typing import Optional
 
 from . import cache, config, db, fetcher_client, placeholder, processor
 from .widgets import compose_widget
@@ -46,6 +45,7 @@ def process_one() -> bool:
         if payload.get("error") == "not_found":
             svg = placeholder.render("not_found", username, theme="dark")
             db.put_widgets(username, "not_found", {"composite": svg})
+            cache.Cache().delete(f"widget:composite:{username}")
             db.complete_job(job["id"])
             log.info("not_found marker persisted for %s", username)
             return True
