@@ -205,3 +205,25 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Per-service SQLite databases (runtime data)
+fetcher/data/*.db
+fetcher/data/*.db-wal
+fetcher/data/*.db-shm
+generator/data/*.db
+generator/data/*.db-wal
+generator/data/*.db-shm
+
+# Built frontend bundle
+generator/src/static/
+generator/frontend/dist/
+generator/frontend/node_modules/
+
+# Python build artifacts
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+
+# Widget build artifacts at repo root (retired)
+/widget_*.svg
+/data/ghstats.db
