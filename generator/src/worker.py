@@ -4,12 +4,27 @@ Run as its own container: CMD python -m src.worker
 """
 import logging
 import time
+from dataclasses import asdict
 
 from . import cache, config, db, fetcher_client, placeholder, processor
 from .widgets import compose_widget
 
 log = logging.getLogger("generator.worker")
 MAX_ATTEMPTS = 3
+
+
+def _compute_widget_data(payload: dict, settings: dict) -> dict:
+    """Compute raw widget data dict for client-side rendering. Written
+    alongside SVGs so the /api/<u>/data endpoint is a precomputed lookup."""
+    custom_tags = settings.get("custom_tags")
+    hidden_languages = settings.get("hidden_languages")
+    return {
+        "grade": asdict(processor.compute_grade(payload, custom_tags=custom_tags)),
+        "impact": [asdict(w) for w in processor.compute_impact_timeline(payload)],
+        "collaborators": [asdict(c) for c in processor.compute_collaborators(payload)],
+        "focus": [asdict(f) for f in processor.compute_focus(payload, hidden_languages=hidden_languages)],
+        "languages": [asdict(l) for l in processor.compute_languages(payload, hidden_languages=hidden_languages)],
+    }
 
 
 def _render_widgets(username: str, payload: dict, settings: dict) -> dict[str, str]:
@@ -45,6 +60,7 @@ def process_one() -> bool:
         if payload.get("error") == "not_found":
             svg = placeholder.render("not_found", username, theme="dark")
             db.put_widgets(username, "not_found", {"composite": svg})
+            db.put_widget_data(username, "not_found", {"not_found": True})
             cache.Cache().delete(f"widget:composite:{username}")
             db.complete_job(job["id"])
             log.info("not_found marker persisted for %s", username)
@@ -56,7 +72,9 @@ def process_one() -> bool:
             return True
 
         widgets = _render_widgets(username, payload, settings_row["settings"])
+        widget_data = _compute_widget_data(payload, settings_row["settings"])
         db.put_widgets(username, settings_row["settings_hash"], widgets)
+        db.put_widget_data(username, settings_row["settings_hash"], widget_data)
         db.set_last_fetcher_hash(username, result.get("payload_hash", ""))
         db.lru_trim(username, config.WIDGET_LRU_PER_USER)
         c = cache.Cache()

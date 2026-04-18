@@ -75,54 +75,57 @@ def test_not_found_status_header(client):
     assert r.headers["X-Widget-Status"] == "not_found"
 
 
-# ---- GET /api/<username>/data: computed widget data for client-side rendering ----
-
-_FAKE_GITHUB_DATA = {
-    "user": {"login": "alice", "followers": 10},
-    "repos": [{"language": "Python", "stargazers_count": 5, "forks_count": 1, "topics": []}],
-    "events": [],
-    "commits": [],
-    "total_commits": 42,
-    "total_prs": 3,
-    "recent_commits": 20,
-}
+# ---- GET /api/<username>/data: precomputed widget data for client-side rendering ----
+# Pure DB lookup — fetcher is never touched on the hot path.
 
 
-def test_data_endpoint_auto_enrolls_and_returns_widget_data(client, monkeypatch):
-    monkeypatch.setattr(
-        apimod.fetcher_client, "get_data",
-        lambda u: {"data": _FAKE_GITHUB_DATA, "payload_hash": "h1", "fetched": True},
-    )
+def test_data_endpoint_unknown_user_enrolls_and_returns_building(client):
     r = client.get("/api/alice/data")
-    assert r.status_code == 200
-    body = r.get_json()
-    assert "data" in body
-    for key in ("grade", "impact", "collaborators", "focus", "languages"):
-        assert key in body["data"]
-    assert body["data"]["grade"]["grade"]  # non-empty letter grade
+    assert r.status_code == 202
+    assert r.get_json() == {"status": "building"}
     assert dbmod.get_settings("alice") is not None  # auto-enrolled
 
 
-def test_data_endpoint_returns_404_for_unknown_github_user(client, monkeypatch):
-    monkeypatch.setattr(
-        apimod.fetcher_client, "get_data",
-        lambda u: {"data": {"error": "not_found"}, "payload_hash": "nf"},
-    )
+def test_data_endpoint_enrolled_but_unbuilt_returns_building(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    r = client.get("/api/alice/data")
+    assert r.status_code == 202
+    assert r.get_json() == {"status": "building"}
+
+
+def test_data_endpoint_returns_ready_after_build(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    sample = {"grade": {"grade": "A", "score": 80, "stats": {}, "tags": [], "breakdown": {}}}
+    dbmod.put_widget_data("alice", "h1", sample)
+    with dbmod._widgets_conn() as c:
+        c.execute(
+            """INSERT INTO current_widget(username, settings_hash, updated_at)
+               VALUES ('alice', 'h1', '2026-04-18T00:00:00Z')
+               ON CONFLICT(username) DO UPDATE SET settings_hash=excluded.settings_hash""")
+        c.commit()
+    r = client.get("/api/alice/data")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["status"] == "ready"
+    assert body["data"] == sample
+
+
+def test_data_endpoint_returns_not_found_for_unknown_github_user(client):
+    dbmod.enroll("ghost", {"theme": "dark"})
+    dbmod.put_widget_data("ghost", "not_found", {"not_found": True})
+    with dbmod._widgets_conn() as c:
+        c.execute(
+            """INSERT INTO current_widget(username, settings_hash, updated_at)
+               VALUES ('ghost', 'not_found', '2026-04-18T00:00:00Z')
+               ON CONFLICT(username) DO UPDATE SET settings_hash=excluded.settings_hash""")
+        c.commit()
     r = client.get("/api/ghost/data")
     assert r.status_code == 404
-    assert r.get_json()["error"] == "not_found"
-
-
-def test_data_endpoint_502_when_fetcher_fails(client, monkeypatch):
-    def boom(_u):
-        raise RuntimeError("connection refused")
-    monkeypatch.setattr(apimod.fetcher_client, "get_data", boom)
-    r = client.get("/api/alice/data")
-    assert r.status_code == 502
+    assert r.get_json()["status"] == "not_found"
 
 
 def test_data_endpoint_rate_limited_before_enroll(client, monkeypatch):
     monkeypatch.setattr(apimod.config, "ENROLLMENT_DAILY_CAP", 0)
     r = client.get("/api/newbie/data")
     assert r.status_code == 429
-    assert r.get_json()["error"] == "rate_limited"
+    assert r.get_json()["status"] == "rate_limited"

@@ -57,7 +57,15 @@ CREATE TABLE IF NOT EXISTS current_widget (
     settings_hash TEXT NOT NULL,
     updated_at    TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS widget_data (
+    username      TEXT NOT NULL,
+    settings_hash TEXT NOT NULL,
+    data_json     TEXT NOT NULL,
+    built_at      TEXT NOT NULL,
+    PRIMARY KEY (username, settings_hash)
+);
 CREATE INDEX IF NOT EXISTS idx_widgets_username ON widgets(username);
+CREATE INDEX IF NOT EXISTS idx_widget_data_username ON widget_data(username);
 """
 
 
@@ -293,6 +301,37 @@ def get_current_widget(username: str, widget_name: str) -> Optional[str]:
     return row["svg"] if row else None
 
 
+def put_widget_data(username: str, hash_: str, data: dict) -> None:
+    """Store computed widget data for client-side rendering. Keyed to the
+    same (username, settings_hash) that widgets are — the worker writes both
+    in the same build pass."""
+    now = _now()
+    with _widgets_conn() as c:
+        c.execute(
+            """INSERT INTO widget_data(username, settings_hash, data_json, built_at)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(username, settings_hash) DO UPDATE SET
+                   data_json = excluded.data_json, built_at = excluded.built_at""",
+            (username, hash_, json.dumps(data, separators=(",", ":")), now),
+        )
+        c.commit()
+
+
+def get_current_widget_data(username: str) -> Optional[dict]:
+    """Returns {'data': <dict>, 'settings_hash': str} for the pointer in
+    current_widget, or None if nothing is built yet."""
+    with _widgets_conn() as c:
+        row = c.execute(
+            """SELECT wd.data_json, wd.settings_hash FROM widget_data wd
+               JOIN current_widget cw ON cw.username=wd.username AND cw.settings_hash=wd.settings_hash
+               WHERE wd.username=?""",
+            (username,),
+        ).fetchone()
+    if row is None:
+        return None
+    return {"data": json.loads(row["data_json"]), "settings_hash": row["settings_hash"]}
+
+
 def lru_trim(username: str, keep: int) -> int:
     """Keep only the N newest settings_hashes per user; delete older rows."""
     with _widgets_conn() as c:
@@ -307,6 +346,10 @@ def lru_trim(username: str, keep: int) -> int:
         placeholders = ",".join("?" * len(to_delete))
         cur = c.execute(
             f"DELETE FROM widgets WHERE username=? AND settings_hash IN ({placeholders})",
+            (username, *to_delete),
+        )
+        c.execute(
+            f"DELETE FROM widget_data WHERE username=? AND settings_hash IN ({placeholders})",
             (username, *to_delete),
         )
         c.commit()

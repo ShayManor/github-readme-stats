@@ -16,15 +16,20 @@ def tmp_dbs(monkeypatch):
 def test_process_one_renders_and_stores_widgets(tmp_dbs):
     dbmod.enroll("alice", {"theme": "dark", "enabled": ["grade"]})
     fake_payload = {"user": {"login": "alice"}, "repos": [], "events": [],
-                    "commits": [], "total_commits": 0, "recent_commits": [],
+                    "commits": [], "total_commits": 0, "recent_commits": 0,
                     "total_prs": 0, "collaborators_data": [], "avatar_b64": ""}
+    fake_data = {"grade": {"grade": "A", "score": 80, "stats": {}, "tags": [], "breakdown": {}}}
     with patch("src.worker.fetcher_client.get_data",
                return_value={"data": fake_payload, "payload_hash": "h1"}), \
          patch("src.worker._render_widgets",
-               return_value={"composite": "<svg>c</svg>", "grade": "<svg>g</svg>"}):
+               return_value={"composite": "<svg>c</svg>", "grade": "<svg>g</svg>"}), \
+         patch("src.worker._compute_widget_data", return_value=fake_data):
         worker.process_one()
     svg = dbmod.get_current_widget("alice", "composite")
     assert svg == "<svg>c</svg>"
+    # Data JSON is written alongside the SVGs so the /data endpoint is a lookup.
+    row = dbmod.get_current_widget_data("alice")
+    assert row is not None and row["data"] == fake_data
 
 
 def test_not_found_payload_renders_not_found_placeholder(tmp_dbs):

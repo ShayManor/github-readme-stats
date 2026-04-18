@@ -6,11 +6,10 @@ Serves:
   /api/*          -> JSON/SVG API
 """
 import os
-from dataclasses import asdict
 from functools import wraps
 from flask import Flask, jsonify, request, Response, send_from_directory
 
-from . import config, db, fetcher_client, placeholder, processor
+from . import config, db, fetcher_client, placeholder
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -57,50 +56,37 @@ def get_widget_named(username: str, widget: str):
 
 @app.route("/api/<username>/data", methods=["GET"])
 def get_user_data(username: str):
-    """Computed widget data for client-side SVG rendering.
+    """Precomputed widget data for client-side SVG rendering.
 
-    Auto-enrolls on first access (so the user appears in settings + the cron
-    keeps their data warm), then computes the data on-demand from fresh
-    fetcher output. Not cached at this layer — the fetcher already caches raw
-    GitHub payloads.
+    Pure DB lookup — never touches the fetcher or runs compute on the hot
+    path. On miss: auto-enroll (queues an async build) and return
+    `{status: "building"}` with HTTP 202 so the client can show demo data
+    and poll until ready.
     """
     settings_row = db.get_settings(username)
     if settings_row is None:
         if db.enrollments_today() >= config.ENROLLMENT_DAILY_CAP:
-            return jsonify({"error": "rate_limited"}), 429
+            return jsonify({"status": "rate_limited"}), 429
         defaults = {
             "theme": "dark",
             "enabled": config.ENABLED_WIDGETS,
             "widget_order": config.WIDGET_ORDER,
         }
         db.enroll(username, defaults)
-    else:
-        db.touch_last_requested(username)
+        return jsonify({"status": "building"}), 202
 
-    try:
-        result = fetcher_client.get_data(username)
-    except Exception as e:
-        return jsonify({"error": f"fetcher unavailable: {e}"}), 502
+    db.touch_last_requested(username)
 
-    payload = result.get("data") or {}
-    if payload.get("error") == "not_found" or "user" not in payload:
-        return jsonify({"error": "not_found"}), 404
+    row = db.get_current_widget_data(username)
+    if row is None:
+        return jsonify({"status": "building"}), 202
 
-    custom_tags = request.args.getlist("custom_tags") or None
-    hidden_languages = request.args.getlist("hidden_languages") or None
+    # Worker writes settings_hash="not_found" + data={"not_found": True}
+    # when GitHub returns 404 for this username.
+    if row["settings_hash"] == "not_found":
+        return jsonify({"status": "not_found"}), 404
 
-    try:
-        data = {
-            "grade": asdict(processor.compute_grade(payload, custom_tags=custom_tags)),
-            "impact": [asdict(w) for w in processor.compute_impact_timeline(payload)],
-            "collaborators": [asdict(c) for c in processor.compute_collaborators(payload)],
-            "focus": [asdict(f) for f in processor.compute_focus(payload, hidden_languages=hidden_languages)],
-            "languages": [asdict(l) for l in processor.compute_languages(payload, hidden_languages=hidden_languages)],
-        }
-    except Exception as e:
-        return jsonify({"error": f"processing failed: {e}"}), 500
-
-    return jsonify({"data": data})
+    return jsonify({"status": "ready", "data": row["data"]})
 
 
 def _serve(username: str, widget_name: str) -> Response:
