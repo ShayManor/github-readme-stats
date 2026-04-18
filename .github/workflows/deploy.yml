@@ -71,7 +71,7 @@ jobs:
     name: deploy to mini PC
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, minipc]
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
