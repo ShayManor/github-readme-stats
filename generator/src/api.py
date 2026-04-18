@@ -5,11 +5,32 @@ Serves:
   /assets/<p>     -> SPA bundles
   /api/*          -> JSON/SVG API
 """
+import logging
 import os
 from functools import wraps
+from threading import Thread
 from flask import Flask, jsonify, request, Response, send_from_directory
 
 from . import config, db, fetcher_client, placeholder
+
+log = logging.getLogger("generator.api")
+
+
+def _kickoff_build():
+    """Run one build cycle in a background thread. Eliminates the worker's
+    poll latency for users who just enrolled or patched settings. The worker
+    container still drains the queue; this just gives interactive requests
+    a head start so the build runs concurrently with the user filling out
+    the workshop page."""
+    try:
+        from . import worker
+        worker.process_one()
+    except Exception:
+        log.exception("background build kickoff failed")
+
+
+def _kickoff_build_async():
+    Thread(target=_kickoff_build, daemon=True).start()
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -73,6 +94,7 @@ def get_user_data(username: str):
             "widget_order": config.WIDGET_ORDER,
         }
         db.enroll(username, defaults)
+        _kickoff_build_async()
         return jsonify({"status": "building"}), 202
 
     db.touch_last_requested(username)
@@ -101,6 +123,7 @@ def _serve(username: str, widget_name: str) -> Response:
             "widget_order": config.WIDGET_ORDER,
         }
         db.enroll(username, defaults)
+        _kickoff_build_async()
         return _placeholder_response("building", username)
 
     db.touch_last_requested(username)
@@ -135,6 +158,7 @@ def enroll_endpoint():
         return jsonify({"error": "rate_limited"}), 429
     defaults = {"theme": "dark", "enabled": config.ENABLED_WIDGETS, "widget_order": config.WIDGET_ORDER}
     job_id = db.enroll(username, defaults)
+    _kickoff_build_async()
     return jsonify({"enrolled": True, "job_id": job_id})
 
 
@@ -156,6 +180,7 @@ def patch_settings(username: str):
     body = request.get_json(silent=True) or {}
     merged = {**current["settings"], **body}
     job_id = db.update_settings(username, merged)
+    _kickoff_build_async()
     return jsonify({"updated": True, "job_id": job_id})
 
 
@@ -172,6 +197,7 @@ def refresh(username: str):
     except Exception as e:
         return jsonify({"error": f"fetch failed: {e}"}), 502
     job_id = db.enqueue_build(username)
+    _kickoff_build_async()
     return jsonify({"refreshed": True, "job_id": job_id})
 
 

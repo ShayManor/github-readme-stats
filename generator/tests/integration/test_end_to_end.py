@@ -1,5 +1,5 @@
 """End-to-end: api + worker in-process + mocked fetcher HTTP."""
-import os, tempfile
+import os, tempfile, time
 import pytest
 import responses
 from src import api as apimod, db as dbmod, worker
@@ -30,10 +30,17 @@ def test_first_request_builds_then_serves_ready(env):
     r1 = client.get("/api/alice")
     assert r1.headers["X-Widget-Status"] == "building"
 
+    # First request kicks off a background build thread; drain any residual
+    # job in case of races, then poll the API for readiness.
     for _ in range(5):
         if not worker.process_one():
             break
 
-    r2 = client.get("/api/alice")
+    deadline = time.time() + 2.0
+    while time.time() < deadline:
+        r2 = client.get("/api/alice")
+        if r2.headers["X-Widget-Status"] == "ready":
+            break
+        time.sleep(0.05)
     assert r2.headers["X-Widget-Status"] == "ready"
     assert r2.data.startswith(b"<svg") or r2.data.startswith(b"<?xml")
