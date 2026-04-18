@@ -19,47 +19,57 @@ const ALL_WIDGETS = [
   { id: 'achievements', label: 'Achievements' },
 ]
 
-// Inline SVGs keep parity with the backend (generator/src/widgets/achievements.py)
-// and render deterministically across platforms where emoji coverage varies.
+// Lucide-style hollow glyphs: consistent stroke-weight + viewBox so the 4
+// buttons line up and read as one icon family. Kept as JSX so they inherit
+// currentColor from the surrounding button's text color.
+const ICON_SVG_PROPS = {
+  width: 16,
+  height: 16,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.75,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+}
+
 const ICONS: { id: string; svg: ReactNode }[] = [
   {
     id: 'trophy',
     svg: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M6 9H4a2 2 0 0 1-2-2V5h4" />
-        <path d="M18 9h2a2 2 0 0 0 2-2V5h-4" />
-        <path d="M6 3h12v6a6 6 0 0 1-12 0V3z" />
-        <path d="M10 21h4" />
-        <path d="M12 15v6" />
+      <svg {...ICON_SVG_PROPS}>
+        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+        <path d="M4 22h16" />
+        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+        <path d="M18 2H6v7a6 6 0 0 0 12 0V2z" />
       </svg>
     ),
   },
   {
     id: 'medal',
     svg: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="15" r="6" />
-        <path d="M8.5 2l3.5 7 3.5-7" />
-        <path d="M7 2h10" />
+      <svg {...ICON_SVG_PROPS}>
+        <circle cx="12" cy="8" r="6" />
+        <path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526" />
       </svg>
     ),
   },
   {
     id: 'star',
     svg: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2" />
+      <svg {...ICON_SVG_PROPS}>
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26" />
       </svg>
     ),
   },
   {
     id: 'hackathon',
     svg: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="4" width="20" height="14" rx="2" />
-        <path d="M8 10l-2 2 2 2" />
-        <path d="M16 10l2 2-2 2" />
-        <path d="M2 20h20" />
+      <svg {...ICON_SVG_PROPS}>
+        <polyline points="16 18 22 12 16 6" />
+        <polyline points="8 6 2 12 8 18" />
       </svg>
     ),
   },
@@ -372,22 +382,24 @@ export function WorkshopScreen({
                 {settings.achievements.map((ach, idx) => (
                   <div key={idx} className="p-2.5 rounded-lg border border-gray-100 bg-gray-50/50">
                     <div className="flex items-center gap-1.5 mb-2">
-                      {ICONS.map(ic => (
-                        <button
-                          key={ic.id}
-                          onClick={() => updateAchievement(idx, 'icon', ic.id)}
-                          className={`w-7 h-7 rounded-md text-sm flex items-center justify-center transition-colors ${
-                            ach.icon === ic.id
-                              ? 'bg-gray-800 ring-1 ring-gray-800'
-                              : 'bg-white border border-gray-200 hover:border-gray-300'
-                          }`}
-                          title={ic.id}
-                        >
-                          <span className={ach.icon === ic.id ? 'text-white' : 'text-gray-600'}>
+                      {ICONS.map(ic => {
+                        const selected = ach.icon === ic.id
+                        return (
+                          <button
+                            key={ic.id}
+                            onClick={() => updateAchievement(idx, 'icon', ic.id)}
+                            className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
+                              selected
+                                ? 'bg-gray-800 text-white border border-gray-800'
+                                : 'bg-white text-gray-500 border border-gray-200 hover:text-gray-800 hover:border-gray-300'
+                            }`}
+                            title={ic.id}
+                            aria-pressed={selected}
+                          >
                             {ic.svg}
-                          </span>
-                        </button>
-                      ))}
+                          </button>
+                        )
+                      })}
                       <div className="flex-1" />
                       <button
                         onClick={() => removeAchievement(idx)}

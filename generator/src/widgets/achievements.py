@@ -18,7 +18,8 @@ def _achievement_icon_svg(icon_type: str, color: str) -> str:
           <path d="M9 3l3 8m0-8l3 8m-6-8h6" stroke="{color}" stroke-width="1.5" fill="none" stroke-linecap="round"/>
         </svg>''',
         "star": f'''<svg viewBox="0 0 24 24" width="24" height="24">
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="{color}" opacity="0.85"/>
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                fill="none" stroke="{color}" stroke-width="1.5" stroke-linejoin="round"/>
         </svg>''',
         "hackathon": f'''<svg viewBox="0 0 24 24" width="24" height="24">
           <rect x="4" y="5" width="16" height="11" rx="1" fill="none" stroke="{color}" stroke-width="1.5"/>

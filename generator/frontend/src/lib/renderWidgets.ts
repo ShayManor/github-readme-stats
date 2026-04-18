@@ -36,6 +36,15 @@ export type PerWidgetSettings = {
 const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 const font = '-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif'
 
+const TAG_ACRONYMS = new Set(['ml','ai','ui','ux','api','cli','sql','css','html','js','ios'])
+function formatTagLabel(tag: string): string {
+  return tag.split('-')
+    .map(w => TAG_ACRONYMS.has(w.toLowerCase())
+      ? w.toUpperCase()
+      : w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
+
 function cardWrapper(inner: string, w: number, h: number, t: Theme, title: string, prefix = '') {
   const sid = `${prefix}shadow`
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" fill="none">
@@ -82,7 +91,7 @@ function renderGrade(data: GradeData, t: Theme, s?: { max_tags?: number }): stri
   let tagsSvg = '', tx = 0, ty = 0
   for (const tag of tags) {
     const tc = TAG_COLORS[tag.tag] ?? t.accent
-    const label = tag.tag.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase())
+    const label = formatTagLabel(tag.tag)
     const tw = Math.round(label.length * 6.6 + 18)
     const po = tag.source === 'earned' ? 0.9 : 0.55
     if (tx + tw > 340) { tx = 0; ty += 30 }
@@ -244,7 +253,7 @@ function achievementIconSvg(iconType: string, color: string): string {
   const icons: Record<string, string> = {
     trophy: `<svg viewBox="0 0 24 24" width="24" height="24"><path d="M7 2h10v2h2.5c.8 0 1.5.7 1.5 1.5V8c0 1.7-1.3 3-3 3h-.5c-.5 1.5-1.8 2.7-3.5 3v2.5h3c.6 0 1 .4 1 1s-.4 1-1 1H7c-.6 0-1-.4-1-1s.4-1 1-1h3V14c-1.7-.3-3-1.5-3.5-3H6c-1.7 0-3-1.3-3-3V5.5C3 4.7 3.7 4 4.5 4H7V2zm0 4H4.5v2c0 .8.7 1.5 1.5 1.5h1V6zm12.5 0H17v3.5h1c.8 0 1.5-.7 1.5-1.5V6z" fill="${color}" opacity="0.85"/></svg>`,
     medal: `<svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="14" r="5" fill="${color}" opacity="0.2"/><circle cx="12" cy="14" r="4" fill="none" stroke="${color}" stroke-width="1.5"/><path d="M12 11.5l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z" fill="${color}"/><path d="M9 3l3 8m0-8l3 8m-6-8h6" stroke="${color}" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>`,
-    star: `<svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="${color}" opacity="0.85"/></svg>`,
+    star: `<svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round"/></svg>`,
     hackathon: `<svg viewBox="0 0 24 24" width="24" height="24"><rect x="4" y="5" width="16" height="11" rx="1" fill="none" stroke="${color}" stroke-width="1.5"/><rect x="3" y="16" width="18" height="1.5" rx="0.5" fill="${color}" opacity="0.85"/><path d="M9 9l-2 3 2 3m6-6l2 3-2 3" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`,
   }
   return icons[iconType] ?? icons.trophy

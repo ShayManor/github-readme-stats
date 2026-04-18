@@ -5,6 +5,17 @@ from ..models import GradeData
 from ..themes import THEMES, TAG_COLORS, GRADE_COLORS
 from ..utils import escape, card_wrapper, icon_svg
 
+# Tokens that should render uppercase instead of title-cased (e.g. "ml-engineer"
+# → "ML Engineer", not "Ml Engineer").
+_TAG_ACRONYMS = {"ml", "ai", "ui", "ux", "api", "cli", "sql", "css", "html", "js", "ios"}
+
+
+def _format_tag_label(tag: str) -> str:
+    return " ".join(
+        w.upper() if w.lower() in _TAG_ACRONYMS else w.capitalize()
+        for w in tag.split("-")
+    )
+
 
 def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dict | None = None) -> str:
     """Renders the developer grade widget with stats and tags.
@@ -63,7 +74,7 @@ def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dic
 
     for tag in (data.tags or []):
         tag_color = TAG_COLORS.get(tag.tag, t["accent"])
-        label = tag.tag.replace("-", " ").title()
+        label = _format_tag_label(tag.tag)
         tw = int(len(label) * 6.6 + 18)
         pill_opacity = 0.9 if tag.source == "earned" else 0.55
 
