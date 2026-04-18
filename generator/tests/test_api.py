@@ -6,6 +6,9 @@ from src import api as apimod
 
 @pytest.fixture
 def client(monkeypatch):
+    # No-op the kickoff so tests don't spawn background threads that
+    # would try to reach the (unmocked) fetcher and race tempdir teardown.
+    monkeypatch.setattr(apimod, "_kickoff_prefetch_async", lambda: None)
     with tempfile.TemporaryDirectory() as d:
         monkeypatch.setattr(dbmod, "SETTINGS_DB_PATH", os.path.join(d, "s.db"))
         monkeypatch.setattr(dbmod, "WIDGETS_DB_PATH", os.path.join(d, "w.db"))
@@ -22,27 +25,28 @@ def test_health(client):
     assert r.get_json()["service"] == "generator"
 
 
-def test_get_unknown_user_auto_enrolls_and_returns_placeholder(client):
+def test_get_unknown_user_returns_building_placeholder_without_enrolling(client):
+    """The SVG endpoint is for README embeds — enrollment is frontend-driven
+    through /data or /api/enroll, so GET /api/<u> does not auto-enroll."""
     r = client.get("/api/alice")
     assert r.status_code == 200
     assert r.headers["X-Widget-Status"] == "building"
     assert "Building" in r.data.decode()
-    assert dbmod.get_settings("alice") is not None
+    assert dbmod.get_settings("alice") is None
 
 
-def test_rate_limit_returns_rate_limited_placeholder(client, monkeypatch):
-    monkeypatch.setattr(apimod.config, "ENROLLMENT_DAILY_CAP", 1)
-    client.get("/api/alice")
-    r = client.get("/api/bob")
-    assert r.headers["X-Widget-Status"] == "rate_limited"
+def test_enrolled_but_not_generated_returns_building(client):
+    """After enrollment (via /data) but before /generate is clicked the SVG
+    endpoint returns a building placeholder."""
+    dbmod.enroll("alice", {"theme": "dark"})
+    r = client.get("/api/alice")
+    assert r.headers["X-Widget-Status"] == "building"
 
 
 def test_enrolled_user_with_built_widget_returns_ready(client):
     dbmod.enroll("alice", {"theme": "dark"})
     dbmod.put_widgets("alice", "h1", {"composite": "<svg>ready</svg>"})
-    with dbmod._settings_conn() as c:
-        c.execute("UPDATE users SET settings_hash='h1' WHERE username='alice'")
-        c.commit()
+    dbmod.point_current_widget("alice", "h1")
     r = client.get("/api/alice")
     assert r.status_code == 200
     assert r.headers["X-Widget-Status"] == "ready"
@@ -68,11 +72,37 @@ def test_refresh_is_one_shot(client):
 def test_not_found_status_header(client):
     dbmod.enroll("ghost", {"theme": "dark"})
     dbmod.put_widgets("ghost", "not_found", {"composite": "<svg>404</svg>"})
-    with dbmod._settings_conn() as c:
-        c.execute("UPDATE users SET settings_hash='not_found' WHERE username='ghost'")
-        c.commit()
+    dbmod.point_current_widget("ghost", "not_found")
     r = client.get("/api/ghost")
     assert r.headers["X-Widget-Status"] == "not_found"
+
+
+def test_generate_endpoint_renders_and_stores_svg(client):
+    """POST /api/<u>/generate invokes the on-demand render path and caches
+    the composite SVG for subsequent README embeds."""
+    dbmod.enroll("alice", {"theme": "dark"})
+    with patch("src.worker.render_widgets_now",
+               return_value={"composite": "<svg>r</svg>", "grade": "<svg>g</svg>"}):
+        # Simulate the render path also updating current_widget so the
+        # follow-up GET sees ready.
+        def fake_render(username):
+            dbmod.put_widgets(username, "h1", {"composite": "<svg>r</svg>"})
+            dbmod.point_current_widget(username, "h1")
+            return {"composite": "<svg>r</svg>"}
+        with patch("src.worker.render_widgets_now", side_effect=fake_render):
+            r = client.post("/api/alice/generate")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["status"] == "ready"
+    assert body["composite_url"] == "/api/alice"
+    r2 = client.get("/api/alice")
+    assert r2.headers["X-Widget-Status"] == "ready"
+    assert b"<svg>r</svg>" in r2.data
+
+
+def test_generate_endpoint_rejects_unenrolled(client):
+    r = client.post("/api/bob/generate")
+    assert r.status_code == 404
 
 
 # ---- GET /api/<username>/data: precomputed widget data for client-side rendering ----

@@ -126,8 +126,17 @@ export default function App() {
     setStep('workshop')
   }
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setStep('result')
+    // Fire-and-forget: the backend renders the composite SVG from the
+    // fetcher's cached payload + current settings and persists it to
+    // widgets.db for README embeds. The Result screen itself still
+    // renders client-side from widgetData for immediate feedback.
+    try {
+      await fetch(`/api/${encodeURIComponent(username)}/generate`, { method: 'POST' })
+    } catch (e) {
+      console.warn('generate call failed:', e)
+    }
   }
 
   const handleBack = () => {

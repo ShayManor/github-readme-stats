@@ -17,7 +17,12 @@ def env(monkeypatch):
 
 
 @responses.activate
-def test_first_request_builds_then_serves_ready(env):
+def test_full_flow_data_then_generate_then_serve(env):
+    """End-to-end of the new two-phase pipeline:
+      1. /data enrolls + kicks off prefetch (worker populates widget_data)
+      2. /generate renders SVG from the cached payload + settings
+      3. /api/<u> serves the stored SVG to README consumers
+    """
     responses.add(
         responses.GET, "http://fetcher-mock/data/alice",
         json={"data": {"user": {"login": "alice"}, "repos": [], "events": [],
@@ -27,20 +32,31 @@ def test_first_request_builds_then_serves_ready(env):
     )
     client = apimod.app.test_client()
 
-    r1 = client.get("/api/alice")
-    assert r1.headers["X-Widget-Status"] == "building"
+    # Phase 1: prefetch via /data (enrolls + kicks off background thread).
+    r_data = client.get("/api/alice/data")
+    assert r_data.status_code == 202
 
-    # First request kicks off a background build thread; drain any residual
-    # job in case of races, then poll the API for readiness.
+    # Drain any residual job synchronously in case the kickoff thread lost
+    # the race (and to make the assertion deterministic).
     for _ in range(5):
         if not worker.process_one():
             break
 
+    # Widget data should now be available for client-side preview.
     deadline = time.time() + 2.0
     while time.time() < deadline:
-        r2 = client.get("/api/alice")
-        if r2.headers["X-Widget-Status"] == "ready":
+        r = client.get("/api/alice/data")
+        if r.status_code == 200 and r.get_json().get("status") == "ready":
             break
         time.sleep(0.05)
-    assert r2.headers["X-Widget-Status"] == "ready"
-    assert r2.data.startswith(b"<svg") or r2.data.startswith(b"<?xml")
+    assert r.status_code == 200 and r.get_json()["status"] == "ready"
+
+    # Phase 2: Generate button → render SVG.
+    r_gen = client.post("/api/alice/generate")
+    assert r_gen.status_code == 200
+    assert r_gen.get_json()["status"] == "ready"
+
+    # Phase 3: SVG is served from DB.
+    r_svg = client.get("/api/alice")
+    assert r_svg.headers["X-Widget-Status"] == "ready"
+    assert r_svg.data.startswith(b"<svg") or r_svg.data.startswith(b"<?xml")

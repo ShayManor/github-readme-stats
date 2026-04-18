@@ -4,6 +4,15 @@ Serves:
   /               -> React SPA (static/index.html)
   /assets/<p>     -> SPA bundles
   /api/*          -> JSON/SVG API
+
+Two-phase pipeline:
+  * Enrollment / settings change enqueues a prefetch job and kicks it off
+    in a background thread so the fetcher starts pulling GitHub data the
+    instant the user submits a username. The thread only hydrates
+    widget_data for the client-side Workshop preview — it does not render
+    SVGs.
+  * POST /api/<u>/generate synchronously renders and persists the composite
+    SVG. This is what the user's "Generate" button calls.
 """
 import logging
 import os
@@ -16,21 +25,19 @@ from . import config, db, fetcher_client, placeholder
 log = logging.getLogger("generator.api")
 
 
-def _kickoff_build():
-    """Run one build cycle in a background thread. Eliminates the worker's
-    poll latency for users who just enrolled or patched settings. The worker
-    container still drains the queue; this just gives interactive requests
-    a head start so the build runs concurrently with the user filling out
-    the workshop page."""
+def _kickoff_prefetch():
+    """Run one prefetch cycle in a background thread. Starts the fetcher
+    immediately on enrollment / settings-change so the raw GitHub payload
+    is hot by the time the user clicks Generate."""
     try:
         from . import worker
         worker.process_one()
     except Exception:
-        log.exception("background build kickoff failed")
+        log.exception("background prefetch kickoff failed")
 
 
-def _kickoff_build_async():
-    Thread(target=_kickoff_build, daemon=True).start()
+def _kickoff_prefetch_async():
+    Thread(target=_kickoff_prefetch, daemon=True).start()
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -94,7 +101,7 @@ def get_user_data(username: str):
             "widget_order": config.WIDGET_ORDER,
         }
         db.enroll(username, defaults)
-        _kickoff_build_async()
+        _kickoff_prefetch_async()
         return jsonify({"status": "building"}), 202
 
     db.touch_last_requested(username)
@@ -112,28 +119,29 @@ def get_user_data(username: str):
 
 
 def _serve(username: str, widget_name: str) -> Response:
-    settings_row = db.get_settings(username)
+    """Serves a cached SVG for README embeds.
 
+    SVGs are only produced by POST /api/<u>/generate. Before that the
+    endpoint returns a "building" placeholder; enrollment is frontend-
+    driven (via /api/<u>/data or /api/enroll) so this path never auto-
+    enrolls on its own.
+    """
+    settings_row = db.get_settings(username)
     if settings_row is None:
-        if db.enrollments_today() >= config.ENROLLMENT_DAILY_CAP:
-            return _placeholder_response("rate_limited", username)
-        defaults = {
-            "theme": "dark",
-            "enabled": config.ENABLED_WIDGETS,
-            "widget_order": config.WIDGET_ORDER,
-        }
-        db.enroll(username, defaults)
-        _kickoff_build_async()
         return _placeholder_response("building", username)
 
     db.touch_last_requested(username)
-    svg = db.get_current_widget(username, widget_name)
-    if svg is None:
-        return _placeholder_response("building", username, theme=settings_row["settings"].get("theme", "dark"))
+    current_hash = db.get_current_widget_hash(username)
+    theme = settings_row["settings"].get("theme", "dark")
 
-    if settings_row.get("settings_hash") == "not_found":
+    if current_hash == "not_found":
+        svg = db.get_current_widget(username, widget_name) or placeholder.render("not_found", username, theme=theme)
         return Response(svg, mimetype="image/svg+xml",
                         headers={"X-Widget-Status": "not_found", "Cache-Control": "no-store"})
+
+    svg = db.get_current_widget(username, widget_name)
+    if svg is None:
+        return _placeholder_response("building", username, theme=theme)
 
     return Response(svg, mimetype="image/svg+xml",
                     headers={"X-Widget-Status": "ready",
@@ -158,7 +166,7 @@ def enroll_endpoint():
         return jsonify({"error": "rate_limited"}), 429
     defaults = {"theme": "dark", "enabled": config.ENABLED_WIDGETS, "widget_order": config.WIDGET_ORDER}
     job_id = db.enroll(username, defaults)
-    _kickoff_build_async()
+    _kickoff_prefetch_async()
     return jsonify({"enrolled": True, "job_id": job_id})
 
 
@@ -180,8 +188,34 @@ def patch_settings(username: str):
     body = request.get_json(silent=True) or {}
     merged = {**current["settings"], **body}
     job_id = db.update_settings(username, merged)
-    _kickoff_build_async()
+    _kickoff_prefetch_async()
     return jsonify({"updated": True, "job_id": job_id})
+
+
+@app.route("/api/<username>/generate", methods=["POST"])
+def generate(username: str):
+    """Render the composite SVG from the cached fetcher payload + current
+    settings, persist it to widgets.db, and return status. Called by the
+    Generate button; safe to call repeatedly (each call re-renders with
+    the latest settings)."""
+    from . import worker
+    if db.get_settings(username) is None:
+        return jsonify({"error": "not_enrolled"}), 404
+    try:
+        widgets = worker.render_widgets_now(username)
+    except LookupError:
+        return jsonify({"error": "not_enrolled"}), 404
+    except Exception as e:
+        log.exception("generate failed for %s", username)
+        return jsonify({"error": f"render_failed: {e}"}), 502
+    current_hash = db.get_current_widget_hash(username)
+    if current_hash == "not_found":
+        return jsonify({"status": "not_found"}), 404
+    return jsonify({
+        "status": "ready",
+        "composite_url": f"/api/{username}",
+        "widgets": list(widgets.keys()),
+    })
 
 
 @app.route("/api/<username>/refresh", methods=["POST"])
@@ -197,7 +231,7 @@ def refresh(username: str):
     except Exception as e:
         return jsonify({"error": f"fetch failed: {e}"}), 502
     job_id = db.enqueue_build(username)
-    _kickoff_build_async()
+    _kickoff_prefetch_async()
     return jsonify({"refreshed": True, "job_id": job_id})
 
 

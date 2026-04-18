@@ -290,6 +290,33 @@ def put_widgets(username: str, hash_: str, widgets: dict[str, str]) -> None:
         c.commit()
 
 
+def get_current_widget_hash(username: str) -> Optional[str]:
+    """The settings_hash that current_widget points at (or None if nothing
+    has been prefetched/rendered yet). Distinct from users.settings_hash,
+    which is the hash of the *currently configured* settings."""
+    with _widgets_conn() as c:
+        row = c.execute(
+            "SELECT settings_hash FROM current_widget WHERE username=?",
+            (username,),
+        ).fetchone()
+    return row["settings_hash"] if row else None
+
+
+def point_current_widget(username: str, hash_: str) -> None:
+    """Flip the current_widget pointer to a settings_hash. Used by the
+    prefetch worker (which writes only widget_data, not SVG rows) and by
+    the render path (which writes both, but calls this too for clarity)."""
+    now = _now()
+    with _widgets_conn() as c:
+        c.execute(
+            """INSERT INTO current_widget(username, settings_hash, updated_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(username) DO UPDATE SET settings_hash=excluded.settings_hash, updated_at=excluded.updated_at""",
+            (username, hash_, now),
+        )
+        c.commit()
+
+
 def get_current_widget(username: str, widget_name: str) -> Optional[str]:
     with _widgets_conn() as c:
         row = c.execute(
