@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, type ReactNode } from 'react'
 import type { WidgetSettings, Achievement, PerWidgetSettings } from '../App'
 import { renderAllWidgets, type WidgetData } from '../lib/renderWidgets'
 
@@ -21,7 +21,7 @@ const ALL_WIDGETS = [
 
 // Inline SVGs keep parity with the backend (generator/src/widgets/achievements.py)
 // and render deterministically across platforms where emoji coverage varies.
-const ICONS: { id: string; svg: JSX.Element }[] = [
+const ICONS: { id: string; svg: ReactNode }[] = [
   {
     id: 'trophy',
     svg: (
