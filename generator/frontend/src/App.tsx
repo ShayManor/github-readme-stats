@@ -55,6 +55,11 @@ export default function App() {
   const [isDemo, setIsDemo] = useState(false)
   const [fetchDone, setFetchDone] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  // Final SVG produced by POST /api/<u>/generate. Rendered on the Result
+  // screen so the user sees the actual backend output, not demo data.
+  const [generatedSvg, setGeneratedSvg] = useState<string | null>(null)
+  const [generateError, setGenerateError] = useState<string | null>(null)
+  const [generating, setGenerating] = useState(false)
   const pollTimer = useRef<number | null>(null)
   const pollStart = useRef<number>(0)
   const aborted = useRef(false)
@@ -128,14 +133,33 @@ export default function App() {
 
   const handleGenerate = async () => {
     setStep('result')
-    // Fire-and-forget: the backend renders the composite SVG from the
-    // fetcher's cached payload + current settings and persists it to
-    // widgets.db for README embeds. The Result screen itself still
-    // renders client-side from widgetData for immediate feedback.
+    setGenerating(true)
+    setGeneratedSvg(null)
+    setGenerateError(null)
     try {
-      await fetch(`/api/${encodeURIComponent(username)}/generate`, { method: 'POST' })
+      const r = await fetch(`/api/${encodeURIComponent(username)}/generate`, { method: 'POST' })
+      if (r.status === 404) {
+        const body = await r.json().catch(() => ({} as { status?: string }))
+        setGenerateError(body.status === 'not_found' ? 'User not found' : 'Not enrolled')
+        return
+      }
+      if (!r.ok) {
+        setGenerateError(`Generate failed (HTTP ${r.status})`)
+        return
+      }
+      // Fetch the backend-rendered composite SVG. Cache-bust so regenerate
+      // after settings change shows the new version, not a stale browser copy.
+      const svgRes = await fetch(`/api/${encodeURIComponent(username)}?t=${Date.now()}`)
+      if (!svgRes.ok) {
+        setGenerateError(`SVG fetch failed (HTTP ${svgRes.status})`)
+        return
+      }
+      setGeneratedSvg(await svgRes.text())
     } catch (e) {
       console.warn('generate call failed:', e)
+      setGenerateError('Network error')
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -169,10 +193,9 @@ export default function App() {
       {step === 'result' && (
         <ResultScreen
           username={username}
-          settings={settings}
-          fetchDone={fetchDone}
-          fetchError={fetchError}
-          widgetData={widgetData}
+          generating={generating}
+          generatedSvg={generatedSvg}
+          generateError={generateError}
           onBack={handleBack}
         />
       )}

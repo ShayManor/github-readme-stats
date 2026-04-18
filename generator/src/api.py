@@ -25,19 +25,21 @@ from . import config, db, fetcher_client, placeholder
 log = logging.getLogger("generator.api")
 
 
-def _kickoff_prefetch():
+def _kickoff_prefetch(username: str):
     """Run one prefetch cycle in a background thread. Starts the fetcher
     immediately on enrollment / settings-change so the raw GitHub payload
     is hot by the time the user clicks Generate."""
+    log.info("prefetch kickoff started for %s", username)
     try:
         from . import worker
         worker.process_one()
+        log.info("prefetch kickoff finished for %s", username)
     except Exception:
-        log.exception("background prefetch kickoff failed")
+        log.exception("prefetch kickoff failed for %s", username)
 
 
-def _kickoff_prefetch_async():
-    Thread(target=_kickoff_prefetch, daemon=True).start()
+def _kickoff_prefetch_async(username: str):
+    Thread(target=_kickoff_prefetch, args=(username,), daemon=True).start()
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -101,7 +103,7 @@ def get_user_data(username: str):
             "widget_order": config.WIDGET_ORDER,
         }
         db.enroll(username, defaults)
-        _kickoff_prefetch_async()
+        _kickoff_prefetch_async(username)
         return jsonify({"status": "building"}), 202
 
     db.touch_last_requested(username)
@@ -166,7 +168,7 @@ def enroll_endpoint():
         return jsonify({"error": "rate_limited"}), 429
     defaults = {"theme": "dark", "enabled": config.ENABLED_WIDGETS, "widget_order": config.WIDGET_ORDER}
     job_id = db.enroll(username, defaults)
-    _kickoff_prefetch_async()
+    _kickoff_prefetch_async(username)
     return jsonify({"enrolled": True, "job_id": job_id})
 
 
@@ -188,7 +190,7 @@ def patch_settings(username: str):
     body = request.get_json(silent=True) or {}
     merged = {**current["settings"], **body}
     job_id = db.update_settings(username, merged)
-    _kickoff_prefetch_async()
+    _kickoff_prefetch_async(username)
     return jsonify({"updated": True, "job_id": job_id})
 
 
@@ -231,7 +233,7 @@ def refresh(username: str):
     except Exception as e:
         return jsonify({"error": f"fetch failed: {e}"}), 502
     job_id = db.enqueue_build(username)
-    _kickoff_prefetch_async()
+    _kickoff_prefetch_async(username)
     return jsonify({"refreshed": True, "job_id": job_id})
 
 

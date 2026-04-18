@@ -8,7 +8,7 @@ from src import api as apimod
 def client(monkeypatch):
     # No-op the kickoff so tests don't spawn background threads that
     # would try to reach the (unmocked) fetcher and race tempdir teardown.
-    monkeypatch.setattr(apimod, "_kickoff_prefetch_async", lambda: None)
+    monkeypatch.setattr(apimod, "_kickoff_prefetch_async", lambda *_a, **_kw: None)
     with tempfile.TemporaryDirectory() as d:
         monkeypatch.setattr(dbmod, "SETTINGS_DB_PATH", os.path.join(d, "s.db"))
         monkeypatch.setattr(dbmod, "WIDGETS_DB_PATH", os.path.join(d, "w.db"))
