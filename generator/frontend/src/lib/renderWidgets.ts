@@ -5,7 +5,7 @@ import { THEMES, TAG_COLORS, GRADE_COLORS, FOCUS_COLORS, LANG_COLORS, type Theme
 export type GradeData = {
   grade: string; score: number
   stats: Record<string, number>
-  tags: { tag: string; source: string; confidence: number }[]
+  tags: { tag: string; source: string; confidence: number; label?: string | null }[]
   breakdown: Record<string, number>
 }
 export type ImpactWeek = { week_start: string; commits: number }
@@ -91,7 +91,7 @@ function renderGrade(data: GradeData, t: Theme, s?: { max_tags?: number }): stri
   let tagsSvg = '', tx = 0, ty = 0
   for (const tag of tags) {
     const tc = TAG_COLORS[tag.tag] ?? t.accent
-    const label = formatTagLabel(tag.tag)
+    const label = tag.label || formatTagLabel(tag.tag)
     const tw = Math.round(label.length * 6.6 + 18)
     const po = tag.source === 'earned' ? 0.9 : 0.55
     if (tx + tw > 340) { tx = 0; ty += 30 }

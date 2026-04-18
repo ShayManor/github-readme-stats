@@ -94,6 +94,21 @@ TAG_COLORS = {
     "open-source": "#3fb950",
 }
 
+# Pick up colors for custom/auto-awarded tags defined in src/tag_rules.py so
+# adding a new tag there is a single-file change.
+def _merge_custom_tag_colors() -> None:
+    try:
+        from .. import tag_rules
+    except Exception:
+        return
+    for tag_id, meta in tag_rules.TAG_DEFS.items():
+        color = meta.get("color")
+        if color and tag_id not in TAG_COLORS:
+            TAG_COLORS[tag_id] = color
+
+
+_merge_custom_tag_colors()
+
 GRADE_COLORS = {
     "S": "#ff6b9d",
     "A": "#3fb950",

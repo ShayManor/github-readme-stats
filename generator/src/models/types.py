@@ -17,6 +17,7 @@ class TagData:
     tag: str
     source: str = "earned"    # "earned" | "chosen"
     confidence: float = 1.0
+    label: str | None = None  # optional display override (e.g. "Founder #42")
 
 
 @dataclass

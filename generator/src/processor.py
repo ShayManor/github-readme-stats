@@ -191,6 +191,7 @@ def _compute_tags(github_data: dict, max_tags: int = None, custom_tags: list[str
 
     # Apply threshold rules
     awarded_tags = []
+    tag_label_overrides: dict[str, str] = {}
 
     # Fullstack: >25% frontend AND >25% backend
     if category_percentages.get("Frontend", 0) > 0.25 and category_percentages.get("Backend", 0) > 0.25:
@@ -237,9 +238,22 @@ def _compute_tags(github_data: dict, max_tags: int = None, custom_tags: list[str
         for tag in custom_tags:
             awarded_tags.append((tag, 1.0))
 
+    # Auto-awarded tags (username-specific + rule-based; see src/tag_rules.py).
+    from . import tag_rules
+    username = (github_data.get("user") or {}).get("login", "")
+    for auto_tag, label in tag_rules.evaluate(username, github_data):
+        awarded_tags.append((auto_tag, 1.0))
+        if label:
+            tag_label_overrides[auto_tag] = label
+
     # Sort by confidence and limit to max_tags
     for tag, conf in sorted(awarded_tags, key=lambda x: -x[1])[:max_tags]:
-        tags.append(TagData(tag=tag, source="earned" if conf < 1.0 else "custom", confidence=round(conf, 2)))
+        tags.append(TagData(
+            tag=tag,
+            source="earned" if conf < 1.0 else "custom",
+            confidence=round(conf, 2),
+            label=tag_label_overrides.get(tag),
+        ))
 
     return tags
 

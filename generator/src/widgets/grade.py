@@ -11,6 +11,14 @@ _TAG_ACRONYMS = {"ml", "ai", "ui", "ux", "api", "cli", "sql", "css", "html", "js
 
 
 def _format_tag_label(tag: str) -> str:
+    # Custom tags may define an explicit label in src/tag_rules.py::TAG_DEFS.
+    try:
+        from .. import tag_rules
+        meta = tag_rules.TAG_DEFS.get(tag)
+        if meta and meta.get("label"):
+            return meta["label"]
+    except Exception:
+        pass
     return " ".join(
         w.upper() if w.lower() in _TAG_ACRONYMS else w.capitalize()
         for w in tag.split("-")
@@ -74,7 +82,7 @@ def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dic
 
     for tag in (data.tags or []):
         tag_color = TAG_COLORS.get(tag.tag, t["accent"])
-        label = _format_tag_label(tag.tag)
+        label = getattr(tag, "label", None) or _format_tag_label(tag.tag)
         tw = int(len(label) * 6.6 + 18)
         pill_opacity = 0.9 if tag.source == "earned" else 0.55
 

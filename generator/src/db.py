@@ -153,6 +153,18 @@ def enrollments_today() -> int:
         return row["count"] if row else 0
 
 
+def enrollment_rank(username: str) -> Optional[int]:
+    """1-based position in overall enrollment order by enrolled_at. Used by
+    tag rules that reward early users (e.g. the 'founder' tag)."""
+    with _settings_conn() as c:
+        row = c.execute("SELECT enrolled_at FROM users WHERE username=?", (username,)).fetchone()
+        if row is None:
+            return None
+        return c.execute(
+            "SELECT COUNT(*) FROM users WHERE enrolled_at <= ?", (row["enrolled_at"],)
+        ).fetchone()[0]
+
+
 def get_settings(username: str) -> Optional[dict]:
     with _settings_conn() as c:
         row = c.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
