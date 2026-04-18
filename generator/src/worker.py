@@ -48,6 +48,7 @@ def _render_widgets(username: str, payload: dict, settings: dict) -> dict[str, s
         hidden_languages=settings.get("hidden_languages"),
         enabled=enabled,
         widget_settings=settings.get("widget_settings") or {},
+        achievements=settings.get("achievements") or [],
     )
     ordered = [w for w in order if w in enabled and w in widgets and widgets[w]]
     composite = compose_widget(

@@ -145,6 +145,7 @@ export default function App() {
         custom_tags: settings.customTags,
         hidden_languages: settings.hiddenLanguages,
         widget_settings: settings.widgetSettings,
+        achievements: settings.achievements.filter(a => a.title.trim()),
       }
       const patchRes = await fetch(`/api/${encodeURIComponent(username)}/settings`, {
         method: 'PATCH',

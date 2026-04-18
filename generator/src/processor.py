@@ -10,6 +10,7 @@ from .models import (
     CollaboratorData,
     FocusCategory,
     LanguageData,
+    AchievementData,
 )
 from .widgets import (
     render_grade_widget,
@@ -17,6 +18,7 @@ from .widgets import (
     render_collaborators_widget,
     render_focus_widget,
     render_languages_widget,
+    render_achievements_widget,
 )
 
 
@@ -495,6 +497,7 @@ def generate_widgets_from_github(
     hidden_languages: list[str] = None,
     enabled: list[str] = None,
     widget_settings: dict[str, dict] | None = None,
+    achievements: list[dict] | None = None,
 ) -> dict[str, str]:
     """
     Takes raw GitHub API data and returns rendered SVG strings
@@ -538,5 +541,20 @@ def generate_widgets_from_github(
     if "languages" in enabled_set:
         languages = compute_languages(github_data, hidden_languages=hidden_languages)
         widgets["languages"] = render_languages_widget(languages, theme, settings=ws.get("languages"))
+
+    if "achievements" in enabled_set:
+        # User-authored content — no GitHub data involved.
+        raw = [a for a in (achievements or []) if (a.get("title") or "").strip()]
+        items = [
+            AchievementData(
+                title=a.get("title", ""),
+                subtitle=a.get("subtitle", ""),
+                event_date=a.get("event_date", ""),
+                icon=a.get("icon", "trophy"),
+            )
+            for a in raw
+        ]
+        if items:
+            widgets["achievements"] = render_achievements_widget(items, theme, settings=ws.get("achievements"))
 
     return widgets
