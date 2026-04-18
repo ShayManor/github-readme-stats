@@ -1,4 +1,4 @@
-name: docker
+name: build and deploy
 
 on:
   push:
@@ -11,7 +11,7 @@ env:
 
 jobs:
   build:
-    name: ${{ matrix.service }}
+    name: build ${{ matrix.service }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -20,6 +20,8 @@ jobs:
       fail-fast: false
       matrix:
         service: [fetcher, generator, edge]
+    outputs:
+      image_tag: ${{ steps.tag.outputs.value }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +34,12 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tag (sha-<short>)
+        id: tag
+        env:
+          SHA: ${{ github.sha }}
+        run: echo "value=sha-${SHA:0:7}" >> "$GITHUB_OUTPUT"
 
       - name: Compute image name (lowercase)
         id: img
@@ -46,8 +54,7 @@ jobs:
         with:
           images: ${{ steps.img.outputs.name }}
           tags: |
-            type=ref,event=branch
-            type=sha,format=short
+            type=raw,value=${{ steps.tag.outputs.value }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build ${{ matrix.service }} image
@@ -59,3 +66,18 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    name: deploy to mini PC
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, minipc]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy compose stack
+        env:
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+          GITHUB_PAT: ${{ secrets.FETCHER_GITHUB_PAT }}
+          FETCHER_INTERNAL_TOKEN: ${{ secrets.FETCHER_INTERNAL_TOKEN }}
+        run: ./deploy/deploy.sh

@@ -1,7 +1,7 @@
 # github-readme-stats
 
 [![tests](https://github.com/ShayManor/github-readme-stats/actions/workflows/tests.yml/badge.svg)](https://github.com/ShayManor/github-readme-stats/actions/workflows/tests.yml)
-[![docker](https://github.com/ShayManor/github-readme-stats/actions/workflows/docker.yml/badge.svg)](https://github.com/ShayManor/github-readme-stats/actions/workflows/docker.yml)
+[![build and deploy](https://github.com/ShayManor/github-readme-stats/actions/workflows/deploy.yml/badge.svg)](https://github.com/ShayManor/github-readme-stats/actions/workflows/deploy.yml)
 
 A monorepo of three independent Python services plus a React frontend,
 each self-contained. See each service's README for details.
