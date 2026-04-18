@@ -134,6 +134,28 @@ export default function App() {
     setGeneratedSvg(null)
     setGenerateError(null)
     try {
+      // Push the user's Workshop choices to the backend BEFORE rendering.
+      // The backend's /generate endpoint re-reads settings from SQLite and
+      // renders with them, so without this PATCH the SVG would reflect
+      // whatever was last persisted (usually the enroll-time defaults)
+      // rather than the user's current selections.
+      const backendSettings = {
+        theme: settings.theme,
+        enabled: settings.widgets,
+        custom_tags: settings.customTags,
+        hidden_languages: settings.hiddenLanguages,
+        widget_settings: settings.widgetSettings,
+      }
+      const patchRes = await fetch(`/api/${encodeURIComponent(username)}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(backendSettings),
+      })
+      if (!patchRes.ok && patchRes.status !== 404) {
+        setGenerateError(`Settings sync failed (HTTP ${patchRes.status})`)
+        return
+      }
+
       const r = await fetch(`/api/${encodeURIComponent(username)}/generate`, { method: 'POST' })
       if (r.status === 404) {
         const body = await r.json().catch(() => ({} as { status?: string }))

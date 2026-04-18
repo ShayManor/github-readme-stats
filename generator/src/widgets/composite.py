@@ -96,5 +96,5 @@ def compose_widget(
   {embedded}
   <text x="{total_w // 2}" y="{total_h - 8}" text-anchor="middle"
         font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
-        font-size="9" fill="{t["text_secondary"]}" opacity="0.5">Generated with ♥</text>
+        font-size="9" fill="{t["text_secondary"]}" opacity="0.5">Generated with gh-stats</text>
 </svg>'''
