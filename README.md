@@ -17,7 +17,6 @@ each self-contained. See each service's README for details.
 ## Design Docs
 
 - Spec: [`docs/superpowers/specs/2026-04-17-production-pipeline-design.md`](docs/superpowers/specs/2026-04-17-production-pipeline-design.md)
-- Plan: [`docs/superpowers/plans/2026-04-17-production-pipeline.md`](docs/superpowers/plans/2026-04-17-production-pipeline.md)
 
 ## Quick start (local dev, no Docker)
 

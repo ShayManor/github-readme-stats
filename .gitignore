@@ -234,3 +234,8 @@ generator/frontend/node_modules/
 .superpowers/
 .playwright-mcp/
 screenshots/
+
+# Kept locally, not tracked
+/CLAUDE.md
+/docs/superpowers/plans/
+/docs/superpowers/specs/
