@@ -52,7 +52,6 @@ export default function App() {
   const [username, setUsername] = useState('')
   const [settings, setSettings] = useState<WidgetSettings>({ ...DEFAULT_SETTINGS })
   const [widgetData, setWidgetData] = useState<WidgetData | null>(null)
-  const [isDemo, setIsDemo] = useState(false)
   const [fetchDone, setFetchDone] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
   // Final SVG produced by POST /api/<u>/generate. Rendered on the Result
@@ -81,7 +80,6 @@ export default function App() {
     setFetchError(null)
     // Show demo data immediately so Workshop is interactive while the worker builds.
     setWidgetData(DEMO_WIDGET_DATA)
-    setIsDemo(true)
 
     const poll = async () => {
       if (aborted.current) return
@@ -93,7 +91,6 @@ export default function App() {
 
         if (r.status === 200 && status === 'ready' && body.data) {
           setWidgetData(body.data)
-          setIsDemo(false)
           setFetchDone(true)
           return
         }
@@ -186,7 +183,6 @@ export default function App() {
           onBack={handleBack}
           fetchDone={fetchDone}
           fetchError={fetchError}
-          isDemo={isDemo}
           widgetData={widgetData}
         />
       )}

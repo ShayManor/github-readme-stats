@@ -86,7 +86,6 @@ type Props = {
   onBack: () => void
   fetchDone: boolean
   fetchError: string | null
-  isDemo: boolean
   widgetData: WidgetData | null
 }
 
@@ -98,7 +97,6 @@ export function WorkshopScreen({
   onBack,
   fetchDone,
   fetchError,
-  isDemo,
   widgetData,
 }: Props) {
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null)
@@ -177,30 +175,13 @@ export function WorkshopScreen({
             Back
           </button>
 
-          <div className="text-sm font-semibold text-gray-800 mb-1">{username}</div>
-          <div className="flex items-center gap-1.5 text-[10px] text-gray-400 mb-6">
-            {fetchError ? (
-              <>
-                <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                {fetchError}
-              </>
-            ) : isDemo ? (
-              <>
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                Building your widget — showing demo
-              </>
-            ) : fetchDone ? (
-              <>
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                Data ready
-              </>
-            ) : (
-              <>
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                Fetching data...
-              </>
-            )}
-          </div>
+          <div className="text-sm font-semibold text-gray-800 mb-6">{username}</div>
+          {fetchError && (
+            <div className="flex items-center gap-1.5 text-[10px] text-red-500 mb-6">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+              {fetchError}
+            </div>
+          )}
 
           {/* Theme */}
           <div className="mb-5">
