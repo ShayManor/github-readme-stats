@@ -110,6 +110,63 @@ function NumberStepper({ value, min, max, onChange }: {
   )
 }
 
+// Common "noise" languages users typically want to hide — shown even when
+// the account-level detection hasn't surfaced them yet (e.g., first load).
+const COMMON_HIDE_LANGS = ['HTML', 'CSS', 'SCSS', 'Jupyter Notebook', 'TeX', 'Shell', 'Dockerfile', 'Makefile', 'Batchfile']
+
+function HiddenLanguagesPicker({
+  detected, hidden, onChange,
+}: {
+  detected: { language: string }[]
+  hidden: string[]
+  onChange: (next: string[]) => void
+}) {
+  const seen = new Set<string>()
+  const options: string[] = []
+  for (const d of detected) if (d.language && !seen.has(d.language)) { seen.add(d.language); options.push(d.language) }
+  for (const c of COMMON_HIDE_LANGS) if (!seen.has(c)) { seen.add(c); options.push(c) }
+  // Preserve any user-set hidden that we haven't otherwise seen.
+  for (const h of hidden) if (!seen.has(h)) { seen.add(h); options.push(h) }
+
+  const toggle = (lang: string) => {
+    onChange(hidden.includes(lang) ? hidden.filter(h => h !== lang) : [...hidden, lang])
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] text-gray-500">Hide languages</span>
+        {hidden.length > 0 && (
+          <button
+            onClick={() => onChange([])}
+            className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {options.map(lang => {
+          const active = hidden.includes(lang)
+          return (
+            <button
+              key={lang}
+              onClick={() => toggle(lang)}
+              className={`px-2 py-0.5 rounded-md text-[10px] transition-colors ${
+                active
+                  ? 'bg-gray-800 text-white border border-gray-800'
+                  : 'bg-white text-gray-500 border border-gray-200 hover:text-gray-800 hover:border-gray-300'
+              }`}
+            >
+              {lang}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function ColorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex gap-1.5 flex-wrap">
@@ -204,6 +261,7 @@ export function WorkshopScreen({
       widgetOrder: ['grade', 'impact', 'collaborators', 'focus', 'languages', 'achievements'],
       achievements: settings.achievements,
       widgetSettings: settings.widgetSettings,
+      hiddenLanguages: settings.hiddenLanguages,
       username,
     })
   }, [widgetData, settings, username])
@@ -346,12 +404,19 @@ export function WorkshopScreen({
                         )}
 
                         {w.id === 'languages' && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-gray-500">Max languages</span>
-                            <NumberStepper
-                              value={getWidgetSetting('languages', 'max_languages', 5)}
-                              min={1} max={10}
-                              onChange={v => updateWidgetSetting('languages', 'max_languages', v)}
+                          <div className="flex flex-col gap-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-gray-500">Max languages</span>
+                              <NumberStepper
+                                value={getWidgetSetting('languages', 'max_languages', 5)}
+                                min={1} max={10}
+                                onChange={v => updateWidgetSetting('languages', 'max_languages', v)}
+                              />
+                            </div>
+                            <HiddenLanguagesPicker
+                              detected={widgetData?.languages ?? []}
+                              hidden={settings.hiddenLanguages}
+                              onChange={next => updateSetting('hiddenLanguages', next)}
                             />
                           </div>
                         )}

@@ -2,6 +2,7 @@
 
 import requests
 import base64
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Protocol
 
 from . import config
@@ -44,6 +45,10 @@ class GitHubDataSource(Protocol):
 
     def fetch_avatar(self, avatar_url: str) -> str:
         """Fetch and encode avatar as base64."""
+        ...
+
+    def fetch_repo_languages(self, full_name: str) -> dict:
+        """Return {language: bytes} for a single repo, or {} on failure."""
         ...
 
 
@@ -502,6 +507,22 @@ class DirectAPISource:
             pass
         return ""
 
+    def fetch_repo_languages(self, full_name: str) -> dict:
+        """Return {language: bytes} for a repo. REST returns exactly this
+        shape — total is summed client-side."""
+        try:
+            resp = requests.get(
+                f"{self.base}/repos/{full_name}/languages",
+                headers=self.headers,
+                timeout=config.API_TIMEOUT,
+            )
+            if resp.ok:
+                data = resp.json()
+                return data if isinstance(data, dict) else {}
+        except Exception:
+            pass
+        return {}
+
 
 # TODO: Future implementation for queue-based batching
 # class QueuedAPISource:
@@ -542,6 +563,12 @@ def fetch_github_data(
     events = source.fetch_events(username)
     commits = source.fetch_commits(username)
 
+    # Attach per-repo language byte breakdown. Without this, the languages
+    # widget falls back to a primary-language repo-count tally, which
+    # heavily under-represents repos whose primary language has small files
+    # (e.g. HTML, Jupyter Notebook).
+    _enrich_repo_languages(repos, source)
+
     # Fetch contribution counts (commits + PRs + issues + reviews)
     print("  Fetching all-time contribution count...")
     total_commits = source.fetch_commit_count(username, repos)
@@ -576,6 +603,24 @@ def fetch_github_data(
         "collaborators_data": collaborators_data,
         "avatar_b64": avatar_b64,
     }
+
+
+def _enrich_repo_languages(repos: list, source: GitHubDataSource) -> None:
+    """Mutates `repos` in-place, attaching `language_bytes: {lang: bytes}` to
+    each repo. Uses a small thread pool — one REST call per repo is cheap
+    individually, but sequentially N repos would block the fetch noticeably."""
+    if not repos:
+        return
+    names = [(i, r["full_name"]) for i, r in enumerate(repos) if r.get("full_name")]
+    print(f"  Fetching language byte breakdown for {len(names)} repos...")
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = {pool.submit(source.fetch_repo_languages, fn): i for i, fn in names}
+        for fut in as_completed(futures):
+            i = futures[fut]
+            try:
+                repos[i]["language_bytes"] = fut.result() or {}
+            except Exception:
+                repos[i]["language_bytes"] = {}
 
 
 def _fetch_collaborators_data(

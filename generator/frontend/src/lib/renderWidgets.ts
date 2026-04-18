@@ -59,7 +59,7 @@ function iconSvg(kind: string, color: string): string {
   const icons: Record<string, string> = {
     commits: `<circle cx="7" cy="7" r="3" fill="none" stroke="${color}" stroke-width="1.4"/><circle cx="7" cy="7" r="1" fill="${color}"/><line x1="7" y1="10" x2="7" y2="14" stroke="${color}" stroke-width="1.4"/><line x1="7" y1="0" x2="7" y2="4" stroke="${color}" stroke-width="1.4"/>`,
     prs: `<circle cx="4" cy="4" r="2" fill="none" stroke="${color}" stroke-width="1.2"/><circle cx="10" cy="10" r="2" fill="none" stroke="${color}" stroke-width="1.2"/><path d="M4 6v4c0 1.1.9 2 2 2h2" fill="none" stroke="${color}" stroke-width="1.2"/>`,
-    stars: `<path d="M7 1l1.8 3.6 4 .6-2.9 2.8.7 4L7 10.2 3.4 12l.7-4L1.2 5.2l4-.6z" fill="${color}" opacity="0.85"/>`,
+    stars: `<path d="M7 1l1.8 3.6 4 .6-2.9 2.8.7 4L7 10.2 3.4 12l.7-4L1.2 5.2l4-.6z" fill="none" stroke="${color}" stroke-width="1.2" stroke-linejoin="round"/>`,
     repos: `<rect x="2" y="1" width="10" height="12" rx="1.5" fill="none" stroke="${color}" stroke-width="1.2"/><line x1="5" y1="4" x2="9" y2="4" stroke="${color}" stroke-width="1"/><line x1="5" y1="6.5" x2="9" y2="6.5" stroke="${color}" stroke-width="1"/><line x1="5" y1="9" x2="7" y2="9" stroke="${color}" stroke-width="1"/>`,
     followers: `<circle cx="5" cy="4" r="2.5" fill="none" stroke="${color}" stroke-width="1.2"/><path d="M0.5 12c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" fill="none" stroke="${color}" stroke-width="1.2"/><circle cx="11" cy="3.5" r="1.8" fill="none" stroke="${color}" stroke-width="1"/><path d="M10 7.5c1.5 0 3.5 1 3.5 3" fill="none" stroke="${color}" stroke-width="1"/>`,
   }
@@ -305,6 +305,7 @@ export function renderAllWidgets(opts: {
   widgetOrder: string[]
   achievements: AchievementInput[]
   widgetSettings: PerWidgetSettings
+  hiddenLanguages?: string[]
   username: string
 }): string {
   const t = THEMES[opts.theme] ?? THEMES.dark
@@ -319,8 +320,16 @@ export function renderAllWidgets(opts: {
     widgetSvgs.collaborators = renderCollaborators(opts.data.collaborators, t, opts.widgetSettings.collaborators)
   if (enabled.has('focus') && opts.data.focus)
     widgetSvgs.focus = renderFocus(opts.data.focus, t, opts.widgetSettings.focus)
-  if (enabled.has('languages') && opts.data.languages)
-    widgetSvgs.languages = renderLanguages(opts.data.languages, t, opts.widgetSettings.languages)
+  if (enabled.has('languages') && opts.data.languages) {
+    // Apply hidden_languages client-side too so the Workshop preview reflects
+    // the user's choice instantly — backend filtering only kicks in on the
+    // next prefetch or on POST /generate.
+    const hiddenSet = new Set(opts.hiddenLanguages ?? [])
+    const filtered = opts.data.languages.filter(l => !hiddenSet.has(l.language))
+    const total = filtered.reduce((a, l) => a + l.percentage, 0) || 1
+    const rescaled = filtered.map(l => ({ ...l, percentage: Math.round(l.percentage / total * 1000) / 10 }))
+    widgetSvgs.languages = renderLanguages(rescaled, t, opts.widgetSettings.languages)
+  }
   if (enabled.has('achievements'))
     widgetSvgs.achievements = renderAchievements(opts.achievements, t, opts.widgetSettings.achievements)
 
@@ -350,6 +359,6 @@ export function renderAllWidgets(opts: {
   <rect width="${totalW}" height="${totalH}" rx="16" fill="${t.bg}"/>
   <rect x="0.5" y="0.5" width="${totalW-1}" height="${totalH-1}" rx="16" fill="none" stroke="${t.card_border}" stroke-width="1"/>
   ${header}${embedded}
-  <text x="${totalW/2}" y="${totalH-8}" text-anchor="middle" font-family="${font}" font-size="9" fill="${t.text_secondary}" opacity="0.5">Generated with ♥</text>
+  <text x="${totalW/2}" y="${totalH-8}" text-anchor="middle" font-family="${font}" font-size="9" fill="${t.text_secondary}" opacity="0.5">Generated with gh-stats</text>
 </svg>`
 }

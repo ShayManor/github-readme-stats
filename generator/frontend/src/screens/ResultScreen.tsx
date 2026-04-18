@@ -67,8 +67,7 @@ export function ResultScreen({ username, generating, generatedSvg, generateError
 
         {!generating && !generateError && safeSvg && (
           <>
-            <p className="text-xs text-gray-400 mb-6">Rendered from live GitHub data</p>
-            <div className="w-full rounded-2xl bg-white shadow-lg ring-1 ring-gray-200 p-6 flex justify-center">
+            <div className="w-full mt-6 rounded-2xl bg-white shadow-lg ring-1 ring-gray-200 p-6 flex justify-center">
               {/*
                 Force the inline SVG to scale up to the card width. The
                 composite is authored at 380px wide — without this the

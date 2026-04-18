@@ -463,6 +463,11 @@ def compute_languages(github_data: dict, hidden_languages: list[str] = None) -> 
     """
     Compute language distribution from repos.
 
+    Prefers per-repo byte breakdowns (`repo["language_bytes"]`) when present —
+    that matches GitHub's own "Most Used Languages" widget. Falls back to a
+    primary-language repo-count tally for payloads fetched before the
+    enrichment step landed.
+
     Args:
         github_data: GitHub profile data
         hidden_languages: Optional list of languages to exclude (e.g., ["HTML", "CSS"])
@@ -471,12 +476,36 @@ def compute_languages(github_data: dict, hidden_languages: list[str] = None) -> 
 
     if hidden_languages is None:
         hidden_languages = HIDDEN_LANGUAGES
+    hidden_set = {h for h in hidden_languages}
 
     repos = github_data["repos"]
-    lang_counts = defaultdict(int)
+    byte_totals: dict[str, int] = defaultdict(int)
+    have_bytes = False
+    for r in repos:
+        lb = r.get("language_bytes") or {}
+        if not isinstance(lb, dict) or not lb:
+            continue
+        have_bytes = True
+        for lang, n in lb.items():
+            if lang and lang not in hidden_set:
+                byte_totals[lang] += int(n or 0)
+
+    if have_bytes and byte_totals:
+        total = sum(byte_totals.values()) or 1
+        return [
+            LanguageData(
+                language=lang,
+                percentage=round(size / total * 100, 1),
+                loc=size,
+            )
+            for lang, size in sorted(byte_totals.items(), key=lambda x: -x[1])
+        ]
+
+    # Legacy fallback: repo-count by primary language.
+    lang_counts: dict[str, int] = defaultdict(int)
     for r in repos:
         lang = r.get("language")
-        if lang and lang not in hidden_languages:
+        if lang and lang not in hidden_set:
             lang_counts[lang] += 1
 
     total = sum(lang_counts.values()) or 1
