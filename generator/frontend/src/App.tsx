@@ -3,6 +3,7 @@ import './index.css'
 import { SearchScreen } from './screens/SearchScreen'
 import { WorkshopScreen } from './screens/WorkshopScreen'
 import { ResultScreen } from './screens/ResultScreen'
+import type { WidgetData } from './lib/renderWidgets'
 
 export type Achievement = {
   title: string
@@ -46,6 +47,7 @@ export default function App() {
   const [step, setStep] = useState<Step>('search')
   const [username, setUsername] = useState('')
   const [settings, setSettings] = useState<WidgetSettings>({ ...DEFAULT_SETTINGS })
+  const [widgetData, setWidgetData] = useState<WidgetData | null>(null)
   const [fetchDone, setFetchDone] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const fetchRef = useRef<AbortController | null>(null)
@@ -56,18 +58,18 @@ export default function App() {
     fetchRef.current = ctrl
     setFetchDone(false)
     setFetchError(null)
+    setWidgetData(null)
 
-    fetch('/api/fetch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: user }),
-      signal: ctrl.signal,
-    })
-      .then(r => {
+    fetch(`/api/${encodeURIComponent(user)}/data`, { signal: ctrl.signal })
+      .then(async r => {
+        if (r.status === 404) throw new Error('User not found')
         if (!r.ok) throw new Error(`Fetch failed (${r.status})`)
         return r.json()
       })
-      .then(() => setFetchDone(true))
+      .then(json => {
+        setWidgetData(json.data)
+        setFetchDone(true)
+      })
       .catch(e => {
         if (e.name !== 'AbortError') {
           console.warn('Fetch error:', e)
@@ -108,6 +110,7 @@ export default function App() {
           onGenerate={handleGenerate}
           onBack={handleBack}
           fetchDone={fetchDone}
+          widgetData={widgetData}
         />
       )}
       {step === 'result' && (
@@ -116,6 +119,7 @@ export default function App() {
           settings={settings}
           fetchDone={fetchDone}
           fetchError={fetchError}
+          widgetData={widgetData}
           onBack={handleBack}
         />
       )}

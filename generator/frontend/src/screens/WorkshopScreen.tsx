@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import type { WidgetSettings, Achievement, PerWidgetSettings } from '../App'
 import { renderAllWidgets, type WidgetData } from '../lib/renderWidgets'
 
@@ -85,6 +85,7 @@ type Props = {
   onGenerate: () => void
   onBack: () => void
   fetchDone: boolean
+  widgetData: WidgetData | null
 }
 
 export function WorkshopScreen({
@@ -94,11 +95,9 @@ export function WorkshopScreen({
   onGenerate,
   onBack,
   fetchDone,
+  widgetData,
 }: Props) {
-  const [widgetData, setWidgetData] = useState<WidgetData | null>(null)
-  const [dataLoading, setDataLoading] = useState(true)
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null)
-  const dataFetched = useRef(false)
 
   const updateSetting = <K extends keyof WidgetSettings>(key: K, val: WidgetSettings[K]) => {
     onSettingsChange({ ...settings, [key]: val })
@@ -143,32 +142,6 @@ export function WorkshopScreen({
   const removeAchievement = (idx: number) => {
     updateSetting('achievements', settings.achievements.filter((_, i) => i !== idx))
   }
-
-  // Fetch widget data once on mount (or when fetch completes)
-  useEffect(() => {
-    if (dataFetched.current || !fetchDone) return
-    dataFetched.current = true
-    setDataLoading(true)
-
-    fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username,
-        widgets: ['grade', 'impact', 'collaborators', 'focus', 'languages'],
-        widget_order: ['grade', 'impact', 'collaborators', 'focus', 'languages'],
-        custom_tags: settings.customTags.length ? settings.customTags : undefined,
-        hidden_languages: settings.hiddenLanguages.length ? settings.hiddenLanguages : undefined,
-        format: 'data',
-      }),
-    })
-      .then(r => r.json())
-      .then(json => {
-        setWidgetData(json.data)
-        setDataLoading(false)
-      })
-      .catch(() => setDataLoading(false))
-  }, [fetchDone])
 
   // Render SVG client-side whenever settings change (instant, no API call)
   const svgContent = useMemo(() => {
@@ -440,7 +413,7 @@ export function WorkshopScreen({
               <div dangerouslySetInnerHTML={{ __html: svgContent }} />
             ) : (
               <div className="w-[420px] h-[600px] rounded-2xl border border-gray-200 bg-white flex items-center justify-center">
-                {dataLoading ? (
+                {!fetchDone ? (
                   <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin-slow" />
                 ) : (
                   <p className="text-xs text-gray-400">No data available</p>

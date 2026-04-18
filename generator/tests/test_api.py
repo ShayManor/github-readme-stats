@@ -73,3 +73,56 @@ def test_not_found_status_header(client):
         c.commit()
     r = client.get("/api/ghost")
     assert r.headers["X-Widget-Status"] == "not_found"
+
+
+# ---- GET /api/<username>/data: computed widget data for client-side rendering ----
+
+_FAKE_GITHUB_DATA = {
+    "user": {"login": "alice", "followers": 10},
+    "repos": [{"language": "Python", "stargazers_count": 5, "forks_count": 1, "topics": []}],
+    "events": [],
+    "commits": [],
+    "total_commits": 42,
+    "total_prs": 3,
+    "recent_commits": 20,
+}
+
+
+def test_data_endpoint_auto_enrolls_and_returns_widget_data(client, monkeypatch):
+    monkeypatch.setattr(
+        apimod.fetcher_client, "get_data",
+        lambda u: {"data": _FAKE_GITHUB_DATA, "payload_hash": "h1", "fetched": True},
+    )
+    r = client.get("/api/alice/data")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert "data" in body
+    for key in ("grade", "impact", "collaborators", "focus", "languages"):
+        assert key in body["data"]
+    assert body["data"]["grade"]["grade"]  # non-empty letter grade
+    assert dbmod.get_settings("alice") is not None  # auto-enrolled
+
+
+def test_data_endpoint_returns_404_for_unknown_github_user(client, monkeypatch):
+    monkeypatch.setattr(
+        apimod.fetcher_client, "get_data",
+        lambda u: {"data": {"error": "not_found"}, "payload_hash": "nf"},
+    )
+    r = client.get("/api/ghost/data")
+    assert r.status_code == 404
+    assert r.get_json()["error"] == "not_found"
+
+
+def test_data_endpoint_502_when_fetcher_fails(client, monkeypatch):
+    def boom(_u):
+        raise RuntimeError("connection refused")
+    monkeypatch.setattr(apimod.fetcher_client, "get_data", boom)
+    r = client.get("/api/alice/data")
+    assert r.status_code == 502
+
+
+def test_data_endpoint_rate_limited_before_enroll(client, monkeypatch):
+    monkeypatch.setattr(apimod.config, "ENROLLMENT_DAILY_CAP", 0)
+    r = client.get("/api/newbie/data")
+    assert r.status_code == 429
+    assert r.get_json()["error"] == "rate_limited"
