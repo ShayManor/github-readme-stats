@@ -100,3 +100,12 @@ def test_reclaim_stuck_running_jobs(tmp_dbs):
     dbmod.reclaim_stuck_jobs(older_than_minutes=10)
     job = dbmod.claim_next_job()
     assert job["id"] == jid
+
+
+def test_set_github_profile_round_trip(tmp_dbs):
+    dbmod.enroll("alice", {"theme": "dark"})
+    dbmod.set_github_profile("alice", github_id=42, github_avatar_url="https://example.com/a.png")
+    with dbmod._settings_conn() as c:
+        row = c.execute("SELECT github_id, github_avatar_url FROM users WHERE username='alice'").fetchone()
+    assert row["github_id"] == 42
+    assert row["github_avatar_url"] == "https://example.com/a.png"

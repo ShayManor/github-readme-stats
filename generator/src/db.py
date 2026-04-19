@@ -27,7 +27,9 @@ CREATE TABLE IF NOT EXISTS users (
     last_fetcher_payload_hash TEXT,
     manual_refresh_used       INTEGER DEFAULT 0,
     last_requested_at         TEXT NOT NULL,
-    edit_token_hash           TEXT
+    edit_token_hash           TEXT,
+    github_id                 INTEGER,
+    github_avatar_url         TEXT
 );
 CREATE TABLE IF NOT EXISTS enrollments_daily (
     day   TEXT PRIMARY KEY,
@@ -116,6 +118,10 @@ def init_dbs() -> None:
         cols = {r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()}
         if "edit_token_hash" not in cols:
             c.execute("ALTER TABLE users ADD COLUMN edit_token_hash TEXT")
+        if "github_id" not in cols:
+            c.execute("ALTER TABLE users ADD COLUMN github_id INTEGER")
+        if "github_avatar_url" not in cols:
+            c.execute("ALTER TABLE users ADD COLUMN github_avatar_url TEXT")
         c.commit()
     with _widgets_conn() as c:
         c.executescript(_WIDGETS_SCHEMA)
@@ -261,6 +267,15 @@ def list_enrolled() -> list[str]:
 def set_last_fetcher_hash(username: str, h: str) -> None:
     with _settings_conn() as c:
         c.execute("UPDATE users SET last_fetcher_payload_hash=? WHERE username=?", (h, username))
+        c.commit()
+
+
+def set_github_profile(username: str, github_id: int, github_avatar_url: str) -> None:
+    with _settings_conn() as c:
+        c.execute(
+            "UPDATE users SET github_id=?, github_avatar_url=? WHERE username=?",
+            (github_id, github_avatar_url, username),
+        )
         c.commit()
 
 
