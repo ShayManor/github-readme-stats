@@ -19,11 +19,12 @@ import os
 import time
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from functools import wraps
 from threading import BoundedSemaphore, Lock
 from flask import Flask, jsonify, request, Response, send_from_directory
 
-from . import config, db, fetcher_client, placeholder
+from . import auth, config, db, fetcher_client, placeholder
 from .themes import THEMES
 from .utils import is_valid_username, settings_size_ok
 import json as _json
@@ -151,6 +152,23 @@ def require_edit_token(fn):
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 app = Flask(__name__, static_folder=None)
+
+if config.SECRET_KEY:
+    app.secret_key = config.SECRET_KEY
+else:
+    # In tests and local dev we allow a weak default; production must set the env.
+    app.secret_key = "dev-insecure-secret-do-not-use-in-prod"
+
+app.config.update(
+    SESSION_COOKIE_NAME="gh_session",
+    SESSION_COOKIE_SECURE=config.SESSION_COOKIE_SECURE,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+)
+
+auth.init_oauth(app)
+
 # Reject oversized bodies before they reach the DB. 128 KB is generous for our
 # settings shape and still caps the memory footprint of a flood of PATCHes.
 app.config["MAX_CONTENT_LENGTH"] = 128 * 1024
