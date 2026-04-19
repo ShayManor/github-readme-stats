@@ -3,6 +3,7 @@ import './index.css'
 import { SearchScreen } from './screens/SearchScreen'
 import { WorkshopScreen } from './screens/WorkshopScreen'
 import { ResultScreen } from './screens/ResultScreen'
+import { AuthButton } from './components/AuthButton'
 import type { WidgetData } from './lib/renderWidgets'
 import { DEMO_WIDGET_DATA } from './lib/demoData'
 import { fetchMe, type Me } from './lib/auth'
@@ -200,6 +201,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <div className="header-bar">
+        <AuthButton me={me} onChange={setMe} />
+      </div>
       {step === 'search' && (
         <SearchScreen onSearch={handleSearch} />
       )}
