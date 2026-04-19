@@ -2,7 +2,7 @@
 
 from ..models import ImpactWeek
 from ..themes import THEMES
-from ..utils import card_wrapper
+from ..utils import card_wrapper, safe_color
 
 
 def render_impact_widget(weeks: list[ImpactWeek], theme_name: str = "dark", period: str = "6mo", settings: dict | None = None) -> str:
@@ -13,7 +13,7 @@ def render_impact_widget(weeks: list[ImpactWeek], theme_name: str = "dark", peri
     """
     t = THEMES[theme_name]
     s = settings or {}
-    line_color = s.get("line_color") or t["accent"]
+    line_color = safe_color(s.get("line_color"), t["accent"])
     w, h = 380, 200
     chart_x, chart_y = 40, 8
     chart_w, chart_h = 316, 82

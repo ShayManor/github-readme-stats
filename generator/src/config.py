@@ -115,3 +115,28 @@ REDIS_URL = os.getenv("REDIS_URL", "")
 ENROLLMENT_DAILY_CAP = int(os.getenv("ENROLLMENT_DAILY_CAP", "50"))
 WIDGET_LRU_PER_USER = int(os.getenv("WIDGET_LRU_PER_USER", "10"))
 POLL_INTERVAL_MINUTES = int(os.getenv("GENERATOR_POLL_INTERVAL_MINUTES", "15"))
+
+# --- Mini-PC capacity controls ---
+# The generator runs on a single mini PC, so the constraining resources are
+# CPU (SVG render) and the GitHub PAT (fetch). Everything here is tunable via
+# env so the operator can loosen limits after measuring real load.
+
+# Per-IP sliding-window rate limits: (max_hits, window_seconds). These are
+# anti-abuse ceilings, not capacity controls — the mini PC is actually
+# protected by the global semaphore + worker pool + queue cap below, so
+# per-IP numbers stay lenient. Tighten via env only if you see a specific
+# abuser.
+RATE_LIMIT_READ_MAX    = int(os.getenv("RATE_LIMIT_READ_MAX", "3000"))
+RATE_LIMIT_READ_WINDOW = int(os.getenv("RATE_LIMIT_READ_WINDOW", "60"))
+RATE_LIMIT_MUTATE_MAX    = int(os.getenv("RATE_LIMIT_MUTATE_MAX", "120"))
+RATE_LIMIT_MUTATE_WINDOW = int(os.getenv("RATE_LIMIT_MUTATE_WINDOW", "60"))
+RATE_LIMIT_ENROLL_MAX    = int(os.getenv("RATE_LIMIT_ENROLL_MAX", "60"))
+RATE_LIMIT_ENROLL_WINDOW = int(os.getenv("RATE_LIMIT_ENROLL_WINDOW", "300"))
+
+# Global across-all-IPs caps. These are the mini-PC backstop: even a
+# thousand-IP botnet can't induce more than this much work at once.
+GENERATE_CONCURRENCY    = int(os.getenv("GENERATE_CONCURRENCY", "2"))
+PREFETCH_MAX_WORKERS    = int(os.getenv("PREFETCH_MAX_WORKERS", "2"))
+PENDING_JOB_QUEUE_CAP   = int(os.getenv("PENDING_JOB_QUEUE_CAP", "200"))
+# How long a /generate caller will wait for the semaphore before giving up.
+GENERATE_SEMAPHORE_WAIT_S = float(os.getenv("GENERATE_SEMAPHORE_WAIT_S", "15"))

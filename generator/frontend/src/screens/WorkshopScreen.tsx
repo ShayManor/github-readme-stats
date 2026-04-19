@@ -1,6 +1,27 @@
 import { useState, useMemo, type ReactNode } from 'react'
+import DOMPurify from 'dompurify'
 import type { WidgetSettings, Achievement, PerWidgetSettings } from '../App'
 import { renderAllWidgets, type WidgetData } from '../lib/renderWidgets'
+
+// Defense-in-depth: the client-rendered preview assembles SVG from
+// GitHub-sourced strings (collaborator logins, repo names) and user-typed
+// achievement text. renderWidgets escapes known fields, but one missed
+// interpolation anywhere upstream would turn into HTML in the preview.
+// DOMPurify neutralises that without affecting normal SVG shapes/styles.
+const SVG_SANITIZE_CONFIG = {
+  USE_PROFILES: { svg: true, svgFilters: true },
+  ADD_TAGS: [
+    'image', 'use', 'clipPath', 'defs', 'style', 'animate', 'animateTransform',
+    'feDropShadow', 'filter', 'linearGradient', 'stop',
+  ],
+  ADD_ATTR: [
+    'xlink:href', 'href', 'clip-path', 'viewBox', 'preserveAspectRatio',
+    'xmlns', 'xmlns:xlink', 'rx', 'ry', 'attributeName', 'from', 'to', 'dur',
+    'fill', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap',
+    'stroke-linejoin', 'dominant-baseline', 'letter-spacing', 'opacity',
+    'filter', 'flood-color', 'flood-opacity', 'stdDeviation',
+  ],
+}
 
 const THEMES = [
   { id: 'midnight', label: 'Midnight', color: '#121820' },
@@ -254,7 +275,7 @@ export function WorkshopScreen({
   // Render SVG client-side whenever settings change (instant, no API call)
   const svgContent = useMemo(() => {
     if (!widgetData) return ''
-    return renderAllWidgets({
+    const raw = renderAllWidgets({
       data: widgetData,
       theme: settings.theme,
       widgets: settings.widgets,
@@ -264,6 +285,7 @@ export function WorkshopScreen({
       hiddenLanguages: settings.hiddenLanguages,
       username,
     })
+    return DOMPurify.sanitize(raw, SVG_SANITIZE_CONFIG)
   }, [widgetData, settings, username])
 
   return (

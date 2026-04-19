@@ -66,7 +66,7 @@ def render_achievements_widget(
       <text x="48" y="20" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
             font-size="13" font-weight="600" fill="{t["text"]}">{escape(ach.title)}</text>
       <text x="48" y="36" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
-            font-size="10" fill="{t["text_secondary"]}">{escape(ach.subtitle)}{(" · " + ach.event_date) if ach.event_date else ""}</text>
+            font-size="10" fill="{t["text_secondary"]}">{escape(ach.subtitle)}{(" · " + escape(ach.event_date)) if ach.event_date else ""}</text>
     </g>'''
 
     total_h = len(shown) * 56 + 50

@@ -2,7 +2,7 @@
 
 from ..models import CollaboratorData
 from ..themes import THEMES
-from ..utils import escape, card_wrapper
+from ..utils import escape, card_wrapper, safe_color
 
 
 def render_collaborators_widget(collabs: list[CollaboratorData], theme_name: str = "dark", settings: dict | None = None) -> str:
@@ -15,7 +15,7 @@ def render_collaborators_widget(collabs: list[CollaboratorData], theme_name: str
     t = THEMES[theme_name]
     s = settings or {}
     max_count = min(max(int(s.get("max_count", 5)), 1), 10)
-    bar_color = s.get("bar_color") or t["purple"]
+    bar_color = safe_color(s.get("bar_color"), t["purple"])
     items = ""
 
     for i, c in enumerate(collabs[:max_count]):

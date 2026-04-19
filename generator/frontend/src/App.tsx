@@ -5,6 +5,7 @@ import { WorkshopScreen } from './screens/WorkshopScreen'
 import { ResultScreen } from './screens/ResultScreen'
 import type { WidgetData } from './lib/renderWidgets'
 import { DEMO_WIDGET_DATA } from './lib/demoData'
+import { authHeaders, saveEditToken } from './lib/editToken'
 
 export type Achievement = {
   title: string
@@ -86,7 +87,13 @@ export default function App() {
       try {
         const r = await fetch(`/api/${encodeURIComponent(user)}/data`)
         if (aborted.current) return
-        const body = await r.json().catch(() => ({} as { status?: string; data?: WidgetData }))
+        const body = await r.json().catch(
+          () => ({} as { status?: string; data?: WidgetData; edit_token?: string })
+        )
+        // The 202 auto-enroll response surfaces an edit_token exactly once
+        // per fresh username. Persist it so PATCH /settings and POST
+        // /refresh can authenticate this browser as the profile owner.
+        if (body.edit_token) saveEditToken(user, body.edit_token)
         const status = body.status
 
         if (r.status === 200 && status === 'ready' && body.data) {
@@ -149,7 +156,10 @@ export default function App() {
       }
       const patchRes = await fetch(`/api/${encodeURIComponent(username)}/settings`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders(username),
+        },
         body: JSON.stringify(backendSettings),
       })
       if (!patchRes.ok && patchRes.status !== 404) {

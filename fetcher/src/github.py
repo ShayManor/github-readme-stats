@@ -1,11 +1,39 @@
 """GitHub data fetching functions."""
 
+import re
 import requests
 import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Protocol
 
 from . import config
+
+
+# GitHub's own username rules: alphanumerics and hyphens, 1–39 chars, no
+# leading/trailing hyphen, no double-hyphens. The fetcher hard-refuses
+# anything else before it reaches URL construction or GraphQL interpolation —
+# the generator validates too, but this is the last line of defense before
+# we talk to GitHub on a caller's behalf.
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$")
+
+# Repo full names: owner/repo. Owner matches the username rule; repo allows the
+# same chars plus dot and underscore (matches GitHub's repo-name regex).
+_REPO_FULL_NAME_RE = re.compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}"
+    r"/[A-Za-z0-9_.-]{1,100}$"
+)
+
+
+def _assert_username(name: str) -> str:
+    if not isinstance(name, str) or not _USERNAME_RE.match(name):
+        raise ValueError(f"invalid github username: {name!r}")
+    return name
+
+
+def _assert_repo_full_name(name: str) -> str:
+    if not isinstance(name, str) or not _REPO_FULL_NAME_RE.match(name):
+        raise ValueError(f"invalid github repo name: {name!r}")
+    return name
 
 
 class GitHubDataSource(Protocol):
@@ -101,18 +129,22 @@ class DirectAPISource:
 
     def fetch_user_data(self, username: str) -> dict:
         """Fetch user profile data."""
+        _assert_username(username)
         return requests.get(
             f"{self.base}/users/{username}",
-            headers=self.headers
+            headers=self.headers,
+            timeout=config.API_TIMEOUT,
         ).json()
 
     def fetch_repos(self, username: str) -> list:
         """Fetch user repositories (owned + contributed to)."""
+        _assert_username(username)
         # Fetch owned repos
         owned = requests.get(
             f"{self.base}/users/{username}/repos",
             headers=self.headers,
             params={"per_page": 100, "sort": "pushed", "type": "owner"},
+            timeout=config.API_TIMEOUT,
         ).json()
 
         # Fetch all repos (includes collabs, orgs)
@@ -120,6 +152,7 @@ class DirectAPISource:
             f"{self.base}/users/{username}/repos",
             headers=self.headers,
             params={"per_page": 100, "sort": "pushed", "type": "all"},
+            timeout=config.API_TIMEOUT,
         ).json()
 
         # Combine and deduplicate
@@ -136,10 +169,12 @@ class DirectAPISource:
 
     def fetch_events(self, username: str) -> list:
         """Fetch user events."""
+        _assert_username(username)
         resp = requests.get(
             f"{self.base}/users/{username}/events",
             headers=self.headers,
             params={"per_page": 100},
+            timeout=config.API_TIMEOUT,
         ).json()
         return resp if isinstance(resp, list) else []
 
@@ -160,28 +195,33 @@ class DirectAPISource:
         from datetime import datetime
 
         try:
+            _assert_username(username)
             # Get the last year of contribution data
             now = datetime.now()
             one_year_ago = now.replace(year=now.year - 1)
             from_date = one_year_ago.strftime("%Y-%m-%dT%H:%M:%SZ")
             to_date = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-            query = f'''
-            query {{
-              user(login: "{username}") {{
-                contributionsCollection(from: "{from_date}", to: "{to_date}") {{
-                  contributionCalendar {{
-                    weeks {{
-                      contributionDays {{
+            # Parameterize username + date range — interpolating username into
+            # the query lets a malicious name break out of the string literal
+            # and smuggle additional GraphQL fields. GitHub's PAT scopes bound
+            # the damage, but the injection is still worth shutting down.
+            query = """
+            query($login: String!, $from: DateTime!, $to: DateTime!) {
+              user(login: $login) {
+                contributionsCollection(from: $from, to: $to) {
+                  contributionCalendar {
+                    weeks {
+                      contributionDays {
                         date
                         contributionCount
-                      }}
-                    }}
-                  }}
-                }}
-              }}
-            }}
-            '''
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
 
             headers = {
                 **self.headers,
@@ -193,7 +233,10 @@ class DirectAPISource:
 
             resp = requests.post(
                 'https://api.github.com/graphql',
-                json={'query': query},
+                json={
+                    'query': query,
+                    'variables': {'login': username, 'from': from_date, 'to': to_date},
+                },
                 headers=headers,
                 timeout=config.API_TIMEOUT
             )
@@ -258,6 +301,7 @@ class DirectAPISource:
         """Fetch all-time contribution count using GraphQL."""
         from datetime import datetime
 
+        _assert_username(username)
         # First, get account creation date
         query = '''
         query($username: String!) {
@@ -297,24 +341,28 @@ class DirectAPISource:
         # Fetch year by year
         total_contributions = 0
         print(f"  Fetching contributions from {created_year} to {current_year}...")
+        year_query = """
+        query($login: String!, $from: DateTime!, $to: DateTime!) {
+          user(login: $login) {
+            contributionsCollection(from: $from, to: $to) {
+              contributionCalendar { totalContributions }
+            }
+          }
+        }
+        """
         for year in range(created_year, current_year + 1):
-            year_query = f'''
-            query {{
-              user(login: "{username}") {{
-                contributionsCollection(from: "{year}-01-01T00:00:00Z", to: "{year}-12-31T23:59:59Z") {{
-                  contributionCalendar {{
-                    totalContributions
-                  }}
-                }}
-              }}
-            }}
-            '''
-
             year_resp = requests.post(
                 'https://api.github.com/graphql',
-                json={'query': year_query},
+                json={
+                    'query': year_query,
+                    'variables': {
+                        'login': username,
+                        'from': f"{year}-01-01T00:00:00Z",
+                        'to': f"{year}-12-31T23:59:59Z",
+                    },
+                },
                 headers=headers,
-                timeout=config.API_TIMEOUT
+                timeout=config.API_TIMEOUT,
             )
 
             if year_resp.ok:
@@ -335,21 +383,20 @@ class DirectAPISource:
         """Fetch contribution count for a specific date range using GraphQL."""
         from datetime import datetime
 
+        _assert_username(username)
         # Convert since_date to proper format
         from_date = f"{since_date}T00:00:00Z"
         to_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        query = f'''
-        query {{
-          user(login: "{username}") {{
-            contributionsCollection(from: "{from_date}", to: "{to_date}") {{
-              contributionCalendar {{
-                totalContributions
-              }}
-            }}
-          }}
-        }}
-        '''
+        query = """
+        query($login: String!, $from: DateTime!, $to: DateTime!) {
+          user(login: $login) {
+            contributionsCollection(from: $from, to: $to) {
+              contributionCalendar { totalContributions }
+            }
+          }
+        }
+        """
 
         headers = {
             **self.headers,
@@ -361,9 +408,12 @@ class DirectAPISource:
 
         resp = requests.post(
             'https://api.github.com/graphql',
-            json={'query': query},
+            json={
+                'query': query,
+                'variables': {'login': username, 'from': from_date, 'to': to_date},
+            },
             headers=headers,
-            timeout=config.API_TIMEOUT
+            timeout=config.API_TIMEOUT,
         )
 
         if resp.ok:

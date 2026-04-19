@@ -54,19 +54,48 @@ def test_enrolled_user_with_built_widget_returns_ready(client):
 
 
 def test_settings_patch_enqueues_rebuild(client):
-    dbmod.enroll("alice", {"theme": "dark"})
-    r = client.patch("/api/alice/settings", json={"theme": "light"})
+    token = dbmod.enroll("alice", {"theme": "dark"})["edit_token"]
+    r = client.patch(
+        "/api/alice/settings",
+        json={"theme": "light"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert r.status_code == 200
     assert dbmod.get_settings("alice")["settings"]["theme"] == "light"
 
 
-def test_refresh_is_one_shot(client):
+def test_settings_patch_without_token_is_unauthorized(client):
     dbmod.enroll("alice", {"theme": "dark"})
+    r = client.patch("/api/alice/settings", json={"theme": "light"})
+    assert r.status_code == 401
+    # Settings must not be mutated when the token check fails.
+    assert dbmod.get_settings("alice")["settings"]["theme"] == "dark"
+
+
+def test_settings_patch_with_wrong_token_is_unauthorized(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    r = client.patch(
+        "/api/alice/settings",
+        json={"theme": "light"},
+        headers={"Authorization": "Bearer not-the-real-token"},
+    )
+    assert r.status_code == 401
+
+
+def test_refresh_is_one_shot(client):
+    token = dbmod.enroll("alice", {"theme": "dark"})["edit_token"]
+    headers = {"Authorization": f"Bearer {token}"}
     with patch("src.api.fetcher_client.force_fetch", return_value={"changed": True, "payload_hash": "x", "stored": True}):
-        r1 = client.post("/api/alice/refresh")
+        r1 = client.post("/api/alice/refresh", headers=headers)
         assert r1.status_code == 200
-        r2 = client.post("/api/alice/refresh")
+        r2 = client.post("/api/alice/refresh", headers=headers)
         assert r2.status_code == 409
+
+
+def test_refresh_without_token_is_unauthorized(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    r = client.post("/api/alice/refresh")
+    assert r.status_code == 401
 
 
 def test_not_found_status_header(client):
@@ -112,7 +141,11 @@ def test_generate_endpoint_rejects_unenrolled(client):
 def test_data_endpoint_unknown_user_enrolls_and_returns_building(client):
     r = client.get("/api/alice/data")
     assert r.status_code == 202
-    assert r.get_json() == {"status": "building"}
+    body = r.get_json()
+    assert body["status"] == "building"
+    # Auto-enroll path surfaces the edit token so the browser can mutate
+    # the freshly-created profile without a separate claim flow.
+    assert "edit_token" in body and body["edit_token"]
     assert dbmod.get_settings("alice") is not None  # auto-enrolled
 
 
