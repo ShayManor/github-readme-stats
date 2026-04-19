@@ -4,10 +4,8 @@ All access goes through this module so a future Postgres swap is local to here.
 Both DBs are opened with WAL mode.
 """
 import hashlib
-import hmac as _hmac
 import json
 import os
-import secrets
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -128,21 +126,15 @@ def init_dbs() -> None:
         c.commit()
 
 
-def _hash_edit_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
 def verify_edit_token(username: str, presented: str) -> bool:
-    """Constant-time check of the caller's edit token against the stored hash."""
-    if not username or not presented:
-        return False
-    with _settings_conn() as c:
-        row = c.execute(
-            "SELECT edit_token_hash FROM users WHERE username=?", (username,)
-        ).fetchone()
-    if row is None or not row["edit_token_hash"]:
-        return False
-    return _hmac.compare_digest(row["edit_token_hash"], _hash_edit_token(presented))
+    """Constant-time check of the caller's edit token against the stored hash.
+
+    DEPRECATED: This function is dead code as of Task 5 (edit tokens are no longer
+    hashed during enrollment). It remains here temporarily while api.py's
+    require_edit_token decorator is still being used. Task 12 will remove both
+    this function and the decorator consumer in api.py.
+    """
+    raise NotImplementedError("verify_edit_token is deprecated; will be removed in Task 12")
 
 
 def settings_hash(settings: dict) -> str:
