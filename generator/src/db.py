@@ -126,17 +126,6 @@ def init_dbs() -> None:
         c.commit()
 
 
-def verify_edit_token(username: str, presented: str) -> bool:
-    """Constant-time check of the caller's edit token against the stored hash.
-
-    DEPRECATED: This function is dead code as of Task 5 (edit tokens are no longer
-    hashed during enrollment). It remains here temporarily while api.py's
-    require_edit_token decorator is still being used. Task 12 will remove both
-    this function and the decorator consumer in api.py.
-    """
-    raise NotImplementedError("verify_edit_token is deprecated; will be removed in Task 12")
-
-
 def settings_hash(settings: dict) -> str:
     canonical = json.dumps(settings, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

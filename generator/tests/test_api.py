@@ -115,18 +115,20 @@ def test_patch_settings_bad_origin_is_403(client):
 
 
 def test_refresh_is_one_shot(client):
-    token = dbmod.enroll("alice", {"theme": "dark"})["edit_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "alice"
     with patch("src.api.fetcher_client.force_fetch", return_value={"changed": True, "payload_hash": "x", "stored": True}):
-        r1 = client.post("/api/alice/refresh", headers=headers)
+        r1 = client.post("/api/alice/refresh", headers={"Origin": "https://gh-stats.com"})
         assert r1.status_code == 200
-        r2 = client.post("/api/alice/refresh", headers=headers)
+        r2 = client.post("/api/alice/refresh", headers={"Origin": "https://gh-stats.com"})
         assert r2.status_code == 409
 
 
 def test_refresh_without_token_is_unauthorized(client):
+    """Old test name; now tests without session but with proper Origin."""
     dbmod.enroll("alice", {"theme": "dark"})
-    r = client.post("/api/alice/refresh")
+    r = client.post("/api/alice/refresh", headers={"Origin": "https://gh-stats.com"})
     assert r.status_code == 401
 
 
@@ -142,6 +144,8 @@ def test_generate_endpoint_renders_and_stores_svg(client):
     """POST /api/<u>/generate invokes the on-demand render path and caches
     the composite SVG for subsequent README embeds."""
     dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "alice"
     with patch("src.worker.render_widgets_now",
                return_value={"composite": "<svg>r</svg>", "grade": "<svg>g</svg>"}):
         # Simulate the render path also updating current_widget so the
@@ -151,7 +155,7 @@ def test_generate_endpoint_renders_and_stores_svg(client):
             dbmod.point_current_widget(username, "h1")
             return {"composite": "<svg>r</svg>"}
         with patch("src.worker.render_widgets_now", side_effect=fake_render):
-            r = client.post("/api/alice/generate")
+            r = client.post("/api/alice/generate", headers={"Origin": "https://gh-stats.com"})
     assert r.status_code == 200
     body = r.get_json()
     assert body["status"] == "ready"
@@ -162,7 +166,10 @@ def test_generate_endpoint_renders_and_stores_svg(client):
 
 
 def test_generate_endpoint_rejects_unenrolled(client):
-    r = client.post("/api/bob/generate")
+    """With OAuth, unenrolled means having a session but no profile."""
+    with client.session_transaction() as s:
+        s["gh_login"] = "bob"
+    r = client.post("/api/bob/generate", headers={"Origin": "https://gh-stats.com"})
     assert r.status_code == 404
 
 
@@ -175,9 +182,8 @@ def test_data_endpoint_unknown_user_enrolls_and_returns_building(client):
     assert r.status_code == 202
     body = r.get_json()
     assert body["status"] == "building"
-    # Auto-enroll path surfaces the edit token so the browser can mutate
-    # the freshly-created profile without a separate claim flow.
-    assert "edit_token" in body and body["edit_token"]
+    # Auto-enroll path no longer surfaces edit token; auth is now session-based.
+    assert "edit_token" not in body
     assert dbmod.get_settings("alice") is not None  # auto-enrolled
 
 
@@ -224,3 +230,23 @@ def test_data_endpoint_rate_limited_before_enroll(client, monkeypatch):
     r = client.get("/api/newbie/data")
     assert r.status_code == 429
     assert r.get_json()["status"] == "rate_limited"
+
+
+def test_generate_without_session_is_401(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    r = client.post("/api/alice/generate", headers={"Origin": "https://gh-stats.com"})
+    assert r.status_code == 401
+
+
+def test_generate_wrong_login_is_403(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "bob"
+    r = client.post("/api/alice/generate", headers={"Origin": "https://gh-stats.com"})
+    assert r.status_code == 403
+
+
+def test_refresh_without_session_is_401(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    r = client.post("/api/alice/refresh", headers={"Origin": "https://gh-stats.com"})
+    assert r.status_code == 401

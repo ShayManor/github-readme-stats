@@ -123,30 +123,6 @@ def rate_limited(bucket: str):
     return deco
 
 
-def _extract_bearer() -> str:
-    """Read the caller-presented edit token. Accepts either
-    `Authorization: Bearer <t>` or `X-Edit-Token: <t>`."""
-    hdr = request.headers.get("Authorization", "")
-    if hdr.startswith("Bearer "):
-        return hdr[len("Bearer "):].strip()
-    return request.headers.get("X-Edit-Token", "").strip()
-
-
-def require_edit_token(fn):
-    """Enforce per-user bearer token on mutating endpoints.
-
-    The token is issued once at enrollment (see db.enroll) and hashed at rest.
-    Without it, anyone could overwrite any registrant's settings — these
-    endpoints used to live behind a no-op decorator."""
-    @wraps(fn)
-    def wrapper(username: str, *args, **kwargs):
-        if not is_valid_username(username):
-            return jsonify({"error": "invalid_username"}), 400
-        presented = _extract_bearer()
-        if not presented or not db.verify_edit_token(username, presented):
-            return jsonify({"error": "unauthorized"}), 401
-        return fn(username, *args, **kwargs)
-    return wrapper
 
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
@@ -309,12 +285,6 @@ def sanitize_settings(body: dict) -> dict:
         out["achievements"] = cleaned
 
     return out
-
-
-def require_auth(fn):
-    """Deprecated passthrough retained for back-compat. New code should use
-    require_edit_token above, which actually authenticates."""
-    return fn
 
 
 @app.route("/", defaults={"path": ""})
@@ -609,12 +579,13 @@ def patch_settings(username: str):
 
 @app.route("/api/<username>/generate", methods=["POST"])
 @rate_limited("mutate")
+@auth.require_same_origin
+@auth.require_github_owner
 def generate(username: str):
     """Render the composite SVG from the cached fetcher payload + current
     settings, persist it to widgets.db, and return status. Called by the
     Generate button; safe to call repeatedly (each call re-renders with
-    the latest settings). Unauth'd — anyone can trigger a render of a
-    previously-enrolled user's public widget.
+    the latest settings). Requires OAuth session with matching login.
 
     Capacity:
       * Per-IP rate limit (mutate bucket) caps how fast any one caller can
@@ -658,7 +629,8 @@ def generate(username: str):
 
 @app.route("/api/<username>/refresh", methods=["POST"])
 @rate_limited("mutate")
-@require_edit_token
+@auth.require_same_origin
+@auth.require_github_owner
 def refresh(username: str):
     s = db.get_settings(username)
     if s is None:
