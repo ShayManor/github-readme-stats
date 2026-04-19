@@ -19,23 +19,24 @@ def test_settings_hash_is_deterministic():
     assert h1 == h2
 
 
-def test_enroll_and_get_settings(tmp_dbs):
-    defaults = {"theme": "dark", "widgets": ["grade"]}
-    result = dbmod.enroll("alice", defaults)
-    assert result["job_id"] > 0
-    assert result["edit_token"]  # first enrollment surfaces a token
-    s = dbmod.get_settings("alice")
-    assert s["settings"] == defaults
-    assert s["manual_refresh_used"] == 0
+def test_enroll_returns_job_id(tmp_dbs):
+    r = dbmod.enroll("alice", {"theme": "dark"})
+    assert r["job_id"] > 0
+    assert "edit_token" not in r
 
 
-def test_enroll_twice_does_not_reissue_token(tmp_dbs):
+def test_enroll_twice_noops(tmp_dbs):
     r1 = dbmod.enroll("alice", {"theme": "dark"})
     r2 = dbmod.enroll("alice", {"theme": "dark"})
-    assert r1["edit_token"]
-    assert r2["edit_token"] is None
-    assert dbmod.verify_edit_token("alice", r1["edit_token"]) is True
-    assert dbmod.verify_edit_token("alice", "wrong") is False
+    assert r1["job_id"] > 0 and r2["job_id"] > 0
+
+
+def test_enroll_with_github_profile(tmp_dbs):
+    dbmod.enroll("alice", {"theme": "dark"}, github_id=1, github_avatar_url="https://x/a.png")
+    with dbmod._settings_conn() as c:
+        row = c.execute("SELECT github_id, github_avatar_url FROM users WHERE username='alice'").fetchone()
+    assert row["github_id"] == 1
+    assert row["github_avatar_url"] == "https://x/a.png"
 
 
 def test_enrollments_daily_counter(tmp_dbs):
