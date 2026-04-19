@@ -84,6 +84,7 @@ _RATE_LIMITS = {
 }
 _rate_lock = Lock()
 _rate_hits: dict[tuple[str, str], deque] = defaultdict(deque)
+_rate_hits_per_login: dict[tuple[str, str], deque] = defaultdict(deque)
 
 
 def _client_ip() -> str:
@@ -111,11 +112,38 @@ def _rate_limit(bucket: str) -> bool:
     return True
 
 
+def _rate_limit_per_login(bucket: str, login: str) -> bool:
+    """Per-login rate limit layered on top of per-IP limit.
+
+    Returns True if allowed; False if the login has exceeded the limit.
+    If no login (unauthenticated), returns True (per-IP already covers it).
+    """
+    if not login:
+        return True  # per-IP already covers the unauth path
+    if bucket == "mutate":
+        limit, window = config.RATE_LIMIT_MUTATE_PER_LOGIN_MAX, config.RATE_LIMIT_MUTATE_PER_LOGIN_WINDOW
+    else:
+        return True
+    now = time.time()
+    cutoff = now - window
+    key = (bucket, login)
+    with _rate_lock:
+        q = _rate_hits_per_login[key]
+        while q and q[0] < cutoff:
+            q.popleft()
+        if len(q) >= limit:
+            return False
+        q.append(now)
+    return True
+
+
 def rate_limited(bucket: str):
     def deco(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             if not _rate_limit(bucket):
+                return jsonify({"error": "rate_limited"}), 429
+            if not _rate_limit_per_login(bucket, auth.current_login() or ""):
                 return jsonify({"error": "rate_limited"}), 429
             return fn(*args, **kwargs)
         return wrapper

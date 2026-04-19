@@ -21,6 +21,9 @@ def client(monkeypatch):
         app.config["SESSION_COOKIE_SECURE"] = False
         with app.test_client() as c:
             yield c
+    # Clear rate limit state after each test to prevent pollution.
+    apimod._rate_hits.clear()
+    apimod._rate_hits_per_login.clear()
 
 
 def test_health(client):
@@ -244,3 +247,22 @@ def test_enroll_endpoint_is_gone(client):
     r = client.post("/api/enroll", json={"username": "alice"},
                     headers={"Origin": "https://gh-stats.com"})
     assert r.status_code == 405
+
+
+def test_per_login_mutate_rate_limit(client, monkeypatch):
+    """Per-login rate limit on mutate routes allows up to MAX requests,
+    then rejects with 429."""
+    monkeypatch.setattr(cfg, "RATE_LIMIT_MUTATE_PER_LOGIN_MAX", 2)
+    monkeypatch.setattr(cfg, "RATE_LIMIT_MUTATE_PER_LOGIN_WINDOW", 60)
+    dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "alice"
+    h = {"Origin": "https://gh-stats.com"}
+    # First two requests should succeed.
+    r1 = client.patch("/api/alice/settings", json={}, headers=h)
+    assert r1.status_code == 200
+    r2 = client.patch("/api/alice/settings", json={}, headers=h)
+    assert r2.status_code == 200
+    # Third request should be rate-limited.
+    r3 = client.patch("/api/alice/settings", json={}, headers=h)
+    assert r3.status_code == 429
