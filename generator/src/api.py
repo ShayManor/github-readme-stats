@@ -575,7 +575,6 @@ def enroll_endpoint():
 
 @app.route("/api/<username>/settings", methods=["GET"])
 @rate_limited("read")
-@require_edit_token
 def get_settings(username: str):
     s = db.get_settings(username)
     if s is None:
@@ -591,7 +590,8 @@ def get_settings(username: str):
 
 @app.route("/api/<username>/settings", methods=["PATCH"])
 @rate_limited("mutate")
-@require_edit_token
+@auth.require_same_origin
+@auth.require_github_owner
 def patch_settings(username: str):
     current = db.get_settings(username)
     if current is None:
