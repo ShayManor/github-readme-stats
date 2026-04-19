@@ -140,3 +140,23 @@ PREFETCH_MAX_WORKERS    = int(os.getenv("PREFETCH_MAX_WORKERS", "2"))
 PENDING_JOB_QUEUE_CAP   = int(os.getenv("PENDING_JOB_QUEUE_CAP", "200"))
 # How long a /generate caller will wait for the semaphore before giving up.
 GENERATE_SEMAPHORE_WAIT_S = float(os.getenv("GENERATE_SEMAPHORE_WAIT_S", "15"))
+
+# --- GitHub OAuth ---
+GITHUB_OAUTH_CLIENT_ID = os.getenv("GITHUB_OAUTH_CLIENT_ID", "")
+GITHUB_OAUTH_CLIENT_SECRET = os.getenv("GITHUB_OAUTH_CLIENT_SECRET", "")
+GITHUB_OAUTH_REDIRECT_URI = os.getenv("GITHUB_OAUTH_REDIRECT_URI", "")
+
+# Flask session secret. Generate once: python -c "import secrets; print(secrets.token_hex(32))"
+SECRET_KEY = os.getenv("GENERATOR_SECRET_KEY", "")
+
+# Dev-only override; defaults to True so production HTTPS cookies work.
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "true").lower() != "false"
+
+# CSRF defense-in-depth: Origin/Referer allowlist for state-changing routes.
+ALLOWED_ORIGINS = tuple(
+    o.strip() for o in os.getenv("ALLOWED_ORIGINS", "https://gh-stats.com").split(",") if o.strip()
+)
+
+# Per-login rate limit on mutate routes, layered on top of per-IP limits.
+RATE_LIMIT_MUTATE_PER_LOGIN_MAX    = int(os.getenv("RATE_LIMIT_MUTATE_PER_LOGIN_MAX", "120"))
+RATE_LIMIT_MUTATE_PER_LOGIN_WINDOW = int(os.getenv("RATE_LIMIT_MUTATE_PER_LOGIN_WINDOW", "60"))
