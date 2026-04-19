@@ -67,3 +67,54 @@ def test_require_same_origin_rejects_missing_origin(app):
             s["gh_login"] = "alice"
         r = c.post("/protected/alice")
     assert r.status_code == 403
+
+
+from src import api as api_module
+
+
+@pytest.fixture
+def api_client(monkeypatch, tmp_path):
+    # Point DBs at tmp + configure origins.
+    from src import db as dbmod, config as cfg
+    monkeypatch.setattr(cfg, "SETTINGS_DB_PATH", str(tmp_path / "s.db"))
+    monkeypatch.setattr(cfg, "WIDGETS_DB_PATH", str(tmp_path / "w.db"))
+    monkeypatch.setattr(dbmod, "SETTINGS_DB_PATH", str(tmp_path / "s.db"))
+    monkeypatch.setattr(dbmod, "WIDGETS_DB_PATH", str(tmp_path / "w.db"))
+    dbmod.init_dbs()
+    monkeypatch.setattr(cfg, "ALLOWED_ORIGINS", ("https://gh-stats.com",))
+    api_module.app.config["TESTING"] = True
+    api_module.app.config["SESSION_COOKIE_SECURE"] = False
+    return api_module.app.test_client()
+
+
+def test_me_unauthed_returns_null(api_client):
+    r = api_client.get("/api/auth/me")
+    assert r.status_code == 200
+    assert r.get_json() == {"login": None}
+
+
+def test_me_authed_returns_login(api_client):
+    with api_client.session_transaction() as s:
+        s["gh_login"] = "alice"
+        s["gh_avatar_url"] = "https://x/a.png"
+    r = api_client.get("/api/auth/me")
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j["login"] == "alice"
+    assert j["avatar_url"] == "https://x/a.png"
+
+
+def test_logout_clears_session(api_client):
+    with api_client.session_transaction() as s:
+        s["gh_login"] = "alice"
+    r = api_client.post("/api/auth/logout", headers={"Origin": "https://gh-stats.com"})
+    assert r.status_code == 204
+    r = api_client.get("/api/auth/me")
+    assert r.get_json()["login"] is None
+
+
+def test_logout_rejects_bad_origin(api_client):
+    with api_client.session_transaction() as s:
+        s["gh_login"] = "alice"
+    r = api_client.post("/api/auth/logout", headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403

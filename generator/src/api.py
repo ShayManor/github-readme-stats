@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from functools import wraps
 from threading import BoundedSemaphore, Lock
-from flask import Flask, jsonify, request, Response, send_from_directory
+from flask import Flask, jsonify, request, Response, send_from_directory, session
 
 from . import auth, config, db, fetcher_client, placeholder
 from .themes import THEMES
@@ -332,6 +332,24 @@ def spa(path: str):
     if os.path.isfile(index):
         return send_from_directory(_STATIC_DIR, "index.html")
     return jsonify({"error": "frontend not built"}), 503
+
+
+@app.route("/api/auth/me", methods=["GET"])
+def auth_me():
+    login = auth.current_login()
+    if login is None:
+        return jsonify({"login": None})
+    return jsonify({
+        "login": login,
+        "avatar_url": session.get("gh_avatar_url"),
+    })
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+@auth.require_same_origin
+def auth_logout():
+    session.clear()
+    return ("", 204)
 
 
 @app.route("/api/health", methods=["GET"])
