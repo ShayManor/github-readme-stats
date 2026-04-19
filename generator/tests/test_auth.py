@@ -118,3 +118,20 @@ def test_logout_rejects_bad_origin(api_client):
         s["gh_login"] = "alice"
     r = api_client.post("/api/auth/logout", headers={"Origin": "https://evil.example"})
     assert r.status_code == 403
+
+
+def test_login_stashes_state_and_redirects(api_client):
+    """Don't depend on authlib's exact redirect URL — just confirm the route
+    stashes a random state, records the next path, and returns a 3xx."""
+    r = api_client.get("/api/auth/github/login?next=/workshop")
+    assert r.status_code in (302, 303)
+    with api_client.session_transaction() as s:
+        assert s.get("oauth_state")
+        assert s.get("oauth_next") == "/workshop"
+
+
+def test_login_rejects_external_next(api_client):
+    r = api_client.get("/api/auth/github/login?next=https://evil.example/foo")
+    assert r.status_code in (302, 303)
+    with api_client.session_transaction() as s:
+        assert s.get("oauth_next") == "/"

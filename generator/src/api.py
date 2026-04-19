@@ -352,6 +352,27 @@ def auth_logout():
     return ("", 204)
 
 
+@app.route("/api/auth/github/login", methods=["GET"])
+def auth_github_login():
+    import secrets as _secrets
+    nxt = request.args.get("next", "/")
+    # Only accept local relative paths to prevent open-redirect.
+    if not isinstance(nxt, str) or not nxt.startswith("/"):
+        nxt = "/"
+    state = _secrets.token_urlsafe(32)
+    session["oauth_state"] = state
+    session["oauth_next"] = nxt
+    redirect_uri = config.GITHUB_OAUTH_REDIRECT_URI or _derived_redirect_uri()
+    return auth.github_client().authorize_redirect(redirect_uri, state=state)
+
+
+def _derived_redirect_uri() -> str:
+    # Works behind cloudflared: the X-Forwarded-Proto/Host headers are set.
+    proto = request.headers.get("X-Forwarded-Proto") or request.scheme
+    host = request.headers.get("X-Forwarded-Host") or request.host
+    return f"{proto}://{host}/api/auth/github/callback"
+
+
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "service": "generator"})
