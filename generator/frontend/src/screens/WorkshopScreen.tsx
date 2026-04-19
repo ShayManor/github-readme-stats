@@ -2,6 +2,7 @@ import { useState, useMemo, type ReactNode } from 'react'
 import DOMPurify from 'dompurify'
 import type { WidgetSettings, Achievement, PerWidgetSettings } from '../App'
 import { renderAllWidgets, type WidgetData } from '../lib/renderWidgets'
+import type { Me } from '../lib/auth'
 
 // Defense-in-depth: the client-rendered preview assembles SVG from
 // GitHub-sourced strings (collaborator logins, repo names) and user-typed
@@ -214,6 +215,8 @@ type Props = {
   fetchDone: boolean
   fetchError: string | null
   widgetData: WidgetData | null
+  me: Me
+  onAuthChange?: (m: Me) => void
 }
 
 export function WorkshopScreen({
