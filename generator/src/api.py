@@ -80,7 +80,6 @@ _RATE_LIMITS = {
     # (endpoint_key): (max_hits, window_seconds). Defaults set in config.py
     # lean toward the mini PC — tighten further via env without redeploying.
     "mutate": (config.RATE_LIMIT_MUTATE_MAX, config.RATE_LIMIT_MUTATE_WINDOW),
-    "enroll": (config.RATE_LIMIT_ENROLL_MAX, config.RATE_LIMIT_ENROLL_WINDOW),
     "read":   (config.RATE_LIMIT_READ_MAX,   config.RATE_LIMIT_READ_WINDOW),
 }
 _rate_lock = Lock()
@@ -432,37 +431,13 @@ def get_user_data(username: str):
     """Precomputed widget data for client-side SVG rendering.
 
     Pure DB lookup — never touches the fetcher or runs compute on the hot
-    path. On miss: auto-enroll (queues an async build) and return
-    `{status: "building"}` with HTTP 202 so the client can show demo data
-    and poll until ready.
+    path. Enrollment is now OAuth-driven only.
     """
     if not is_valid_username(username):
         return jsonify({"error": "invalid_username"}), 400
     settings_row = db.get_settings(username)
     if settings_row is None:
-        if not _rate_limit("enroll"):
-            return jsonify({"status": "rate_limited"}), 429
-        if db.enrollments_today() >= config.ENROLLMENT_DAILY_CAP:
-            return jsonify({"status": "rate_limited"}), 429
-        # Queue-depth backpressure: if the worker is already behind, stop
-        # accepting new enrollments until it catches up. Prevents a burst
-        # of auto-enrolls from filling the jobs table faster than a mini
-        # PC can drain it.
-        if db.pending_job_count() >= config.PENDING_JOB_QUEUE_CAP:
-            return jsonify({"status": "rate_limited"}), 429
-        defaults = {
-            "theme": "dark",
-            "enabled": config.ENABLED_WIDGETS,
-            "widget_order": config.WIDGET_ORDER,
-        }
-        result = db.enroll(username, defaults)
-        _kickoff_prefetch_async(username)
-        # Token is surfaced on this auto-enroll path so the browser UI can
-        # edit the freshly-created profile without a separate claim step.
-        resp = {"status": "building"}
-        if result.get("edit_token"):
-            resp["edit_token"] = result["edit_token"]
-        return jsonify(resp), 202
+        return jsonify({"status": "not_found"}), 404
 
     db.touch_last_requested(username)
 
@@ -480,9 +455,8 @@ def _serve(username: str, widget_name: str) -> Response:
     """Serves a cached SVG for README embeds.
 
     SVGs are only produced by POST /api/<u>/generate. Before that the
-    endpoint returns a "building" placeholder; enrollment is frontend-
-    driven (via /api/<u>/data or /api/enroll) so this path never auto-
-    enrolls on its own.
+    endpoint returns a "building" placeholder; enrollment is now OAuth-driven
+    so this path never auto-enrolls on its own.
     """
     settings_row = db.get_settings(username)
     if settings_row is None:
@@ -519,28 +493,6 @@ def _placeholder_response(variant: str, username: str, theme: str = "dark") -> R
                     headers={"X-Widget-Status": variant, "Cache-Control": "no-store",
                              "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
                              "X-Content-Type-Options": "nosniff"})
-
-
-@app.route("/api/enroll", methods=["POST"])
-@rate_limited("enroll")
-def enroll_endpoint():
-    body = request.get_json(silent=True) or {}
-    username = body.get("username")
-    if not is_valid_username(username):
-        return jsonify({"error": "invalid_username"}), 400
-    if db.get_settings(username) is not None:
-        return jsonify({"error": "already_enrolled"}), 409
-    if db.enrollments_today() >= config.ENROLLMENT_DAILY_CAP:
-        return jsonify({"error": "rate_limited"}), 429
-    if db.pending_job_count() >= config.PENDING_JOB_QUEUE_CAP:
-        return jsonify({"error": "rate_limited"}), 429
-    defaults = {"theme": "dark", "enabled": config.ENABLED_WIDGETS, "widget_order": config.WIDGET_ORDER}
-    result = db.enroll(username, defaults)
-    _kickoff_prefetch_async(username)
-    body = {"enrolled": True, "job_id": result["job_id"]}
-    if result.get("edit_token"):
-        body["edit_token"] = result["edit_token"]
-    return jsonify(body)
 
 
 @app.route("/api/<username>/settings", methods=["GET"])

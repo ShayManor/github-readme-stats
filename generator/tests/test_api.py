@@ -177,16 +177,6 @@ def test_generate_endpoint_rejects_unenrolled(client):
 # Pure DB lookup — fetcher is never touched on the hot path.
 
 
-def test_data_endpoint_unknown_user_enrolls_and_returns_building(client):
-    r = client.get("/api/alice/data")
-    assert r.status_code == 202
-    body = r.get_json()
-    assert body["status"] == "building"
-    # Auto-enroll path no longer surfaces edit token; auth is now session-based.
-    assert "edit_token" not in body
-    assert dbmod.get_settings("alice") is not None  # auto-enrolled
-
-
 def test_data_endpoint_enrolled_but_unbuilt_returns_building(client):
     dbmod.enroll("alice", {"theme": "dark"})
     r = client.get("/api/alice/data")
@@ -225,13 +215,6 @@ def test_data_endpoint_returns_not_found_for_unknown_github_user(client):
     assert r.get_json()["status"] == "not_found"
 
 
-def test_data_endpoint_rate_limited_before_enroll(client, monkeypatch):
-    monkeypatch.setattr(apimod.config, "ENROLLMENT_DAILY_CAP", 0)
-    r = client.get("/api/newbie/data")
-    assert r.status_code == 429
-    assert r.get_json()["status"] == "rate_limited"
-
-
 def test_generate_without_session_is_401(client):
     dbmod.enroll("alice", {"theme": "dark"})
     r = client.post("/api/alice/generate", headers={"Origin": "https://gh-stats.com"})
@@ -250,3 +233,14 @@ def test_refresh_without_session_is_401(client):
     dbmod.enroll("alice", {"theme": "dark"})
     r = client.post("/api/alice/refresh", headers={"Origin": "https://gh-stats.com"})
     assert r.status_code == 401
+
+
+def test_data_unknown_user_returns_404(client):
+    r = client.get("/api/testuser/data")
+    assert r.status_code == 404
+
+
+def test_enroll_endpoint_is_gone(client):
+    r = client.post("/api/enroll", json={"username": "alice"},
+                    headers={"Origin": "https://gh-stats.com"})
+    assert r.status_code == 405
