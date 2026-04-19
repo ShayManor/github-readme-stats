@@ -373,6 +373,66 @@ def _derived_redirect_uri() -> str:
     return f"{proto}://{host}/api/auth/github/callback"
 
 
+def _gh_api_get(token: str, path: str) -> dict:
+    """Thin wrapper over requests.get so tests can monkeypatch one function."""
+    import requests
+    r = requests.get(
+        f"https://api.github.com/{path.lstrip('/')}",
+        headers={"Authorization": f"Bearer {token}",
+                 "Accept": "application/vnd.github+json"},
+        timeout=config.API_TIMEOUT,
+    )
+    if r.status_code >= 400:
+        raise RuntimeError(f"github {path} {r.status_code}")
+    return r.json()
+
+
+@app.route("/api/auth/github/callback", methods=["GET"])
+def auth_github_callback():
+    from flask import redirect
+    state = request.args.get("state", "")
+    expected = session.pop("oauth_state", None)
+    nxt = session.pop("oauth_next", "/") or "/"
+    if not expected or state != expected:
+        return jsonify({"error": "bad_state"}), 400
+    try:
+        token_resp = auth.github_client().authorize_access_token()
+    except Exception:
+        log.exception("token exchange failed")
+        return redirect("/?auth_error=exchange")
+    access_token = token_resp.get("access_token") if token_resp else None
+    if not access_token:
+        return redirect("/?auth_error=exchange")
+    try:
+        user = _gh_api_get(access_token, "user")
+    except Exception:
+        log.exception("github /user failed")
+        return redirect("/?auth_error=profile")
+
+    login_raw = user.get("login")
+    gh_id = user.get("id")
+    avatar_url = user.get("avatar_url") or ""
+    if not isinstance(login_raw, str) or not is_valid_username(login_raw) or not isinstance(gh_id, int):
+        return redirect("/?auth_error=profile")
+
+    login = login_raw.lower()
+    session.permanent = True
+    session["gh_login"] = login
+    session["gh_id"] = gh_id
+    session["gh_avatar_url"] = avatar_url
+
+    # Implicit enrollment. Idempotent; refreshes github_avatar_url on return logins.
+    defaults = {
+        "theme": "dark",
+        "enabled": config.ENABLED_WIDGETS,
+        "widget_order": config.WIDGET_ORDER,
+    }
+    db.enroll(login, defaults, github_id=gh_id, github_avatar_url=avatar_url)
+    _kickoff_prefetch_async(login)
+
+    return redirect(nxt)
+
+
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "service": "generator"})

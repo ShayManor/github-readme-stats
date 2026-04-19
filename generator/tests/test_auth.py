@@ -135,3 +135,39 @@ def test_login_rejects_external_next(api_client):
     assert r.status_code in (302, 303)
     with api_client.session_transaction() as s:
         assert s.get("oauth_next") == "/"
+
+
+def test_callback_state_mismatch_400(api_client):
+    with api_client.session_transaction() as s:
+        s["oauth_state"] = "correct"
+    r = api_client.get("/api/auth/github/callback?code=abc&state=wrong")
+    assert r.status_code == 400
+
+
+def test_callback_happy_path_sets_session(api_client, monkeypatch):
+    """End-to-end callback: stub token exchange + /user, verify session state."""
+    from src import auth as authmod, db as dbmod
+    # Pre-populate session with matching state
+    with api_client.session_transaction() as s:
+        s["oauth_state"] = "good-state"
+        s["oauth_next"] = "/"
+
+    # Stub authlib's token exchange
+    def fake_authorize_access_token(**_kwargs):
+        return {"access_token": "ghs_abc", "token_type": "bearer"}
+    monkeypatch.setattr(authmod.github_client(), "authorize_access_token", fake_authorize_access_token)
+
+    # Stub the GitHub /user call
+    import src.api as apimod
+    monkeypatch.setattr(apimod, "_gh_api_get",
+                        lambda token, path: {"id": 123, "login": "Alice", "avatar_url": "https://x/a.png"})
+
+    r = api_client.get("/api/auth/github/callback?code=abc&state=good-state")
+    assert r.status_code in (302, 303)
+    assert r.headers["Location"].endswith("/")
+    with api_client.session_transaction() as s:
+        assert s["gh_login"] == "alice"
+        assert s["gh_id"] == 123
+        assert s["gh_avatar_url"] == "https://x/a.png"
+    # Row should now exist with github profile populated.
+    assert dbmod.get_settings("alice") is not None
