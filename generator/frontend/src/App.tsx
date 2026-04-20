@@ -278,6 +278,7 @@ export default function App() {
           generatedSvg={generatedSvg}
           generateError={generateError}
           onBack={handleBack}
+          onRegenerate={handleGenerate}
         />
       )}
     </div>

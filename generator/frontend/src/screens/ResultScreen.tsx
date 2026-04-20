@@ -15,9 +15,10 @@ type Props = {
   generatedSvg: string | null
   generateError: string | null
   onBack: () => void
+  onRegenerate: () => void
 }
 
-export function ResultScreen({ username, generating, generatedSvg, generateError, onBack }: Props) {
+export function ResultScreen({ username, generating, generatedSvg, generateError, onBack, onRegenerate }: Props) {
   const safeSvg = useMemo(() => (generatedSvg ? sanitizeSvg(generatedSvg) : ''), [generatedSvg])
   const [copied, setCopied] = useState(false)
   const embedUrl = `${window.location.origin}/api/${encodeURIComponent(username)}`
@@ -35,7 +36,7 @@ export function ResultScreen({ username, generating, generatedSvg, generateError
 
   return (
     <div className="min-h-screen flex flex-col items-center animate-fade-in-up">
-      <div className="w-full max-w-3xl px-6 pt-6">
+      <div className="w-full max-w-3xl px-6 pt-6 flex items-center justify-between">
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
@@ -44,6 +45,28 @@ export function ResultScreen({ username, generating, generatedSvg, generateError
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
           Back
+        </button>
+        <button
+          onClick={onRegenerate}
+          disabled={generating}
+          title="Re-render the widget from the most recent cached data. Does not re-fetch from GitHub."
+          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={generating ? 'animate-spin-slow' : ''}
+          >
+            <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+            <path d="M21 3v5h-5" />
+          </svg>
+          {generating ? 'Regenerating…' : 'Regenerate'}
         </button>
       </div>
 

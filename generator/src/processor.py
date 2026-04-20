@@ -86,20 +86,15 @@ def compute_grade(github_data: dict, custom_tags: list[str] = None) -> GradeData
                 active_weeks.add((iso[0], iso[1]))
             except ValueError:
                 continue
-    consistency_score = min(len(active_weeks) / 40 * 100, 100)
 
-    # Weights sum to 1.0. Commits dominates (the user's actual output),
-    # consistency is the second-biggest (rewards sustained work over the
-    # last year, not just lifetime totals). Stars is softened two ways:
-    # its weight drops from 0.20 to 0.12, and the cap rises from 200 to
-    # 300 so each individual star contributes less to maxing the factor.
+    # Weights sum to 1.0
     per_factor = {
-        "commits":     (min(commits / 2000 * 100, 100),      0.33),
-        "consistency": (consistency_score,                   0.22),
-        "repos":       (min(repo_count / 30 * 100, 100),     0.15),
-        "stars":       (min(stars / 300 * 100, 100),         0.12),
-        "forks":       (min(forks / 50 * 100, 100),          0.08),
-        "activity":    (min(len(events) / 80 * 100, 100),    0.07),
+        "commits":     (min(commits / 3000 * 100, 100), 0.33),
+        "consistency": (min(len(active_weeks) / 40 * 100, 100), 0.22),
+        "repos":       (min(repo_count / 40 * 100, 100), 0.15),
+        "stars":       (min(stars / 200 * 100, 100), 0.11),
+        "forks":       (min(forks / 20 * 100, 100), 0.08),
+        "activity":    (min(len(events) / 80 * 100, 100), 0.08),
         "followers":   (min(followers / 100 * 100, 100), 0.03),
     }
     scores = {k: v for k, (v, _w) in per_factor.items()}
