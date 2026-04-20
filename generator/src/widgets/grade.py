@@ -138,7 +138,7 @@ def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dic
               stroke-linecap="round" transform="rotate(-90)">
         <animate attributeName="stroke-dashoffset" from="{circumference}" to="{offset}" dur="1s" fill="freeze"/>
       </circle>
-      <text x="0" y="2" text-anchor="middle" dominant-baseline="middle"
+      <text x="0" y="{grade_font * 0.35:.2f}" text-anchor="middle"
             font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
             font-size="{grade_font}" font-weight="800" fill="{color}">{escape(data.grade)}</text>
     </g>

@@ -520,18 +520,45 @@ def compute_languages(github_data: dict, hidden_languages: list[str] = None) -> 
     hidden_set = {h for h in hidden_languages}
 
     repos = github_data["repos"]
-    byte_totals: dict[str, int] = defaultdict(int)
-    have_bytes = False
-    for r in repos:
-        lb = r.get("language_bytes") or {}
-        if not isinstance(lb, dict) or not lb:
-            continue
-        have_bytes = True
-        for lang, n in lb.items():
-            if lang and lang not in hidden_set:
-                byte_totals[lang] += int(n or 0)
+    login = (github_data.get("user") or {}).get("login") or ""
+    login_lc = login.lower()
 
-    if have_bytes and byte_totals:
+    def _is_authored(r: dict) -> bool:
+        # Repos the user mostly didn't write shouldn't dominate their
+        # language mix. "Authored" = not a fork AND owned by the user
+        # (or by an org where we can't easily tell, so stay conservative
+        # and require personal ownership). This drops the big-fork /
+        # random-org-contribution case that was skewing the widget.
+        if r.get("fork"):
+            return False
+        owner_login = ((r.get("owner") or {}).get("login") or "").lower()
+        return bool(owner_login) and owner_login == login_lc
+
+    def _byte_tally(predicate) -> dict[str, int]:
+        totals: dict[str, int] = defaultdict(int)
+        for r in repos:
+            if not predicate(r):
+                continue
+            lb = r.get("language_bytes") or {}
+            if not isinstance(lb, dict):
+                continue
+            for lang, n in lb.items():
+                if lang and lang not in hidden_set:
+                    totals[lang] += int(n or 0)
+        return totals
+
+    # Preferred: bytes across authored repos only.
+    byte_totals = _byte_tally(_is_authored)
+
+    # Fallback ladder so the widget is never empty: if the user has no
+    # authored repos with byte data (rare — new accounts, or everything
+    # is a fork), expand to all non-fork repos, and finally to everything.
+    if not byte_totals:
+        byte_totals = _byte_tally(lambda r: not r.get("fork"))
+    if not byte_totals:
+        byte_totals = _byte_tally(lambda r: True)
+
+    if byte_totals:
         total = sum(byte_totals.values()) or 1
         return [
             LanguageData(
@@ -542,12 +569,19 @@ def compute_languages(github_data: dict, hidden_languages: list[str] = None) -> 
             for lang, size in sorted(byte_totals.items(), key=lambda x: -x[1])
         ]
 
-    # Legacy fallback: repo-count by primary language.
+    # Legacy fallback: repo-count by primary language, same ownership filter.
     lang_counts: dict[str, int] = defaultdict(int)
     for r in repos:
+        if not _is_authored(r):
+            continue
         lang = r.get("language")
         if lang and lang not in hidden_set:
             lang_counts[lang] += 1
+    if not lang_counts:
+        for r in repos:
+            lang = r.get("language")
+            if lang and lang not in hidden_set:
+                lang_counts[lang] += 1
 
     total = sum(lang_counts.values()) or 1
     return [
