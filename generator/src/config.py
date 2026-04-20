@@ -142,9 +142,11 @@ PENDING_JOB_QUEUE_CAP   = int(os.getenv("PENDING_JOB_QUEUE_CAP", "200"))
 GENERATE_SEMAPHORE_WAIT_S = float(os.getenv("GENERATE_SEMAPHORE_WAIT_S", "15"))
 
 # --- GitHub OAuth ---
-GITHUB_OAUTH_CLIENT_ID = os.getenv("GITHUB_OAUTH_CLIENT_ID", "")
-GITHUB_OAUTH_CLIENT_SECRET = os.getenv("GITHUB_OAUTH_CLIENT_SECRET", "")
-GITHUB_OAUTH_REDIRECT_URI = os.getenv("GITHUB_OAUTH_REDIRECT_URI", "")
+# Env names avoid the reserved GITHUB_ prefix so they can be stored as GitHub
+# Actions secrets (which reject GITHUB_* names).
+GITHUB_OAUTH_CLIENT_ID = os.getenv("GH_OAUTH_CLIENT_ID", "")
+GITHUB_OAUTH_CLIENT_SECRET = os.getenv("GH_OAUTH_CLIENT_SECRET", "")
+GITHUB_OAUTH_REDIRECT_URI = os.getenv("GH_OAUTH_REDIRECT_URI", "")
 
 # Flask session secret. Generate once: python -c "import secrets; print(secrets.token_hex(32))"
 SECRET_KEY = os.getenv("GENERATOR_SECRET_KEY", "")
