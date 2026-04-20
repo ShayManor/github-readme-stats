@@ -8,6 +8,7 @@ from .types import (
     FocusCategory,
     LanguageData,
     AchievementData,
+    StreakData,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "FocusCategory",
     "LanguageData",
     "AchievementData",
+    "StreakData",
 ]

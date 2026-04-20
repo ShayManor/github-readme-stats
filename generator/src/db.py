@@ -44,6 +44,16 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_pending ON jobs(status, created_at);
+CREATE TABLE IF NOT EXISTS user_streaks (
+    username         TEXT PRIMARY KEY,
+    current_streak   INTEGER NOT NULL DEFAULT 0,
+    current_start    TEXT NOT NULL DEFAULT '',
+    last_active_date TEXT NOT NULL DEFAULT '',
+    max_streak       INTEGER NOT NULL DEFAULT 0,
+    max_start        TEXT NOT NULL DEFAULT '',
+    max_end          TEXT NOT NULL DEFAULT '',
+    updated_at       TEXT NOT NULL
+);
 """
 
 _WIDGETS_SCHEMA = """
@@ -250,6 +260,56 @@ def list_enrolled() -> list[str]:
 def set_last_fetcher_hash(username: str, h: str) -> None:
     with _settings_conn() as c:
         c.execute("UPDATE users SET last_fetcher_payload_hash=? WHERE username=?", (h, username))
+        c.commit()
+
+
+def get_user_streak(username: str) -> Optional[dict]:
+    """Return the persisted streak row for a user, or None if never written."""
+    with _settings_conn() as c:
+        row = c.execute(
+            "SELECT * FROM user_streaks WHERE username=?", (username,)
+        ).fetchone()
+    if row is None:
+        return None
+    return {
+        "current_streak":   row["current_streak"],
+        "current_start":    row["current_start"],
+        "last_active_date": row["last_active_date"],
+        "max_streak":       row["max_streak"],
+        "max_start":        row["max_start"],
+        "max_end":          row["max_end"],
+        "updated_at":       row["updated_at"],
+    }
+
+
+def put_user_streak(username: str, streak: dict) -> None:
+    """UPSERT the streak row for a user. Caller supplies the merged values."""
+    now = _now()
+    with _settings_conn() as c:
+        c.execute(
+            """INSERT INTO user_streaks(
+                   username, current_streak, current_start, last_active_date,
+                   max_streak, max_start, max_end, updated_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(username) DO UPDATE SET
+                   current_streak=excluded.current_streak,
+                   current_start=excluded.current_start,
+                   last_active_date=excluded.last_active_date,
+                   max_streak=excluded.max_streak,
+                   max_start=excluded.max_start,
+                   max_end=excluded.max_end,
+                   updated_at=excluded.updated_at""",
+            (
+                username,
+                int(streak.get("current_streak", 0)),
+                streak.get("current_start", ""),
+                streak.get("last_active_date", ""),
+                int(streak.get("max_streak", 0)),
+                streak.get("max_start", ""),
+                streak.get("max_end", ""),
+                now,
+            ),
+        )
         c.commit()
 
 

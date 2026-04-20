@@ -110,3 +110,43 @@ def test_set_github_profile_round_trip(tmp_dbs):
         row = c.execute("SELECT github_id, github_avatar_url FROM users WHERE username='alice'").fetchone()
     assert row["github_id"] == 42
     assert row["github_avatar_url"] == "https://example.com/a.png"
+
+
+def test_get_user_streak_missing_returns_none(tmp_dbs):
+    assert dbmod.get_user_streak("nobody") is None
+
+
+def test_put_and_get_user_streak_roundtrip(tmp_dbs):
+    dbmod.put_user_streak("alice", {
+        "current_streak": 12,
+        "current_start": "2026-04-08",
+        "last_active_date": "2026-04-19",
+        "max_streak": 42,
+        "max_start": "2025-11-01",
+        "max_end": "2025-12-12",
+    })
+    row = dbmod.get_user_streak("alice")
+    assert row["current_streak"] == 12
+    assert row["current_start"] == "2026-04-08"
+    assert row["last_active_date"] == "2026-04-19"
+    assert row["max_streak"] == 42
+    assert row["max_start"] == "2025-11-01"
+    assert row["max_end"] == "2025-12-12"
+    assert row["updated_at"]  # set on write
+
+
+def test_put_user_streak_upserts(tmp_dbs):
+    dbmod.put_user_streak("alice", {
+        "current_streak": 1, "current_start": "2026-04-19",
+        "last_active_date": "2026-04-19",
+        "max_streak": 1, "max_start": "2026-04-19", "max_end": "2026-04-19",
+    })
+    dbmod.put_user_streak("alice", {
+        "current_streak": 2, "current_start": "2026-04-18",
+        "last_active_date": "2026-04-19",
+        "max_streak": 5, "max_start": "2024-01-01", "max_end": "2024-01-05",
+    })
+    row = dbmod.get_user_streak("alice")
+    assert row["current_streak"] == 2
+    assert row["max_streak"] == 5
+    assert row["max_start"] == "2024-01-01"

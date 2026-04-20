@@ -11,6 +11,7 @@ from .models import (
     FocusCategory,
     LanguageData,
     AchievementData,
+    StreakData,
 )
 from .widgets import (
     render_grade_widget,
@@ -19,6 +20,7 @@ from .widgets import (
     render_focus_widget,
     render_languages_widget,
     render_achievements_widget,
+    render_streaks_widget,
 )
 
 
@@ -533,6 +535,115 @@ def compute_languages(github_data: dict, hidden_languages: list[str] = None) -> 
     ]
 
 
+def compute_streaks(github_data: dict, stored: dict | None) -> StreakData:
+    """
+    Compute the user's current and longest contribution streaks.
+
+    Current streak: starts at today if today has contributions; else at
+    yesterday if yesterday has contributions (1-day grace for end-of-UTC).
+    Walks backward while consecutive days are all active.
+
+    Max streak: scans the contribution window for the longest consecutive run,
+    then merges with `stored["max_streak"]`. The greater value wins; when the
+    stored value wins, its start/end dates are preserved.
+
+    Args:
+        github_data: Raw fetcher payload; reads "commits" as a list of
+            {"date": "YYYY-MM-DD", "count": N}. Zero-count entries are ignored.
+        stored: Optional dict from db.get_user_streak(username). None on first
+            observation.
+    """
+    entries = github_data.get("commits") or []
+    active = set()
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        d = e.get("date")
+        n = e.get("count") or 0
+        if d and n > 0:
+            active.add(d)
+
+    stored = stored or {}
+    prior_max       = int(stored.get("max_streak", 0) or 0)
+    prior_max_start = stored.get("max_start", "") or ""
+    prior_max_end   = stored.get("max_end", "") or ""
+    stored_last     = stored.get("last_active_date", "") or ""
+
+    if not active:
+        return StreakData(
+            current=0,
+            max=prior_max,
+            current_start="",
+            last_active_date=stored_last,
+            max_start=prior_max_start,
+            max_end=prior_max_end,
+        )
+
+    today = datetime.utcnow().date()
+    yesterday = today - timedelta(days=1)
+
+    if today.isoformat() in active:
+        cursor = today
+    elif yesterday.isoformat() in active:
+        cursor = yesterday
+    else:
+        cursor = None
+
+    current = 0
+    current_start = ""
+    if cursor is not None:
+        start = cursor
+        while start.isoformat() in active:
+            current += 1
+            start -= timedelta(days=1)
+        current_start = (start + timedelta(days=1)).isoformat()
+
+    sorted_dates = sorted(active)
+    from datetime import date as _date
+    max_len = 0
+    max_start_iso = ""
+    max_end_iso = ""
+    run_start = sorted_dates[0]
+    run_len = 1
+    prev = _date.fromisoformat(run_start)
+    for ds in sorted_dates[1:]:
+        cur = _date.fromisoformat(ds)
+        if (cur - prev).days == 1:
+            run_len += 1
+        else:
+            if run_len > max_len:
+                max_len = run_len
+                max_start_iso = run_start
+                max_end_iso = prev.isoformat()
+            run_start = ds
+            run_len = 1
+        prev = cur
+    if run_len > max_len:
+        max_len = run_len
+        max_start_iso = run_start
+        max_end_iso = prev.isoformat()
+
+    if max_len > prior_max:
+        merged_max = max_len
+        merged_start = max_start_iso
+        merged_end = max_end_iso
+    else:
+        merged_max = prior_max
+        merged_start = prior_max_start
+        merged_end = prior_max_end
+
+    last_active = sorted_dates[-1]
+
+    return StreakData(
+        current=current,
+        max=merged_max,
+        current_start=current_start,
+        last_active_date=last_active,
+        max_start=merged_start,
+        max_end=merged_end,
+    )
+
+
 def generate_widgets_from_github(
     github_data: dict,
     theme: str = "dark",
@@ -541,6 +652,7 @@ def generate_widgets_from_github(
     enabled: list[str] = None,
     widget_settings: dict[str, dict] | None = None,
     achievements: list[dict] | None = None,
+    stored_streak: dict | None = None,
 ) -> dict[str, str]:
     """
     Takes raw GitHub API data and returns rendered SVG strings
@@ -555,6 +667,8 @@ def generate_widgets_from_github(
             Defaults to ENABLED_WIDGETS from config.
         widget_settings: Optional per-widget settings dict, keyed by widget name.
             Each value is a dict of settings for that widget's renderer.
+        stored_streak: Optional dict from db.get_user_streak(username); carries
+            the all-time longest streak forward across refreshes.
     """
     from .config import ENABLED_WIDGETS
 
@@ -584,6 +698,10 @@ def generate_widgets_from_github(
     if "languages" in enabled_set:
         languages = compute_languages(github_data, hidden_languages=hidden_languages)
         widgets["languages"] = render_languages_widget(languages, theme, settings=ws.get("languages"))
+
+    if "streaks" in enabled_set:
+        streak = compute_streaks(github_data, stored_streak)
+        widgets["streaks"] = render_streaks_widget(streak, theme, settings=ws.get("streaks"))
 
     if "achievements" in enabled_set:
         # User-authored content — no GitHub data involved.
