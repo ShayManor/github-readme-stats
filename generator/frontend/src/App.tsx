@@ -87,6 +87,49 @@ export default function App() {
     setFetchError(null)
     // Show demo data immediately so Workshop is interactive while the worker builds.
     setWidgetData(DEMO_WIDGET_DATA)
+    // Reset to defaults first so the form doesn't briefly show the previous
+    // user's settings while we fetch this user's saved blob.
+    setSettings({ ...DEFAULT_SETTINGS })
+
+    // Hydrate the Workshop form from the user's persisted settings.
+    // Backend stores snake_case keys; we map them onto the camelCase
+    // state shape here. 404 (not enrolled yet) is expected — keep defaults.
+    void (async () => {
+      try {
+        const r = await fetch(`/api/${encodeURIComponent(user)}/settings`, {
+          credentials: 'include',
+        })
+        if (aborted.current) return
+        if (!r.ok) return
+        const body = await r.json().catch(() => null) as { settings?: Record<string, unknown> } | null
+        const s = body?.settings
+        if (!s || typeof s !== 'object') return
+        setSettings(prev => {
+          const next: WidgetSettings = { ...prev }
+          if (typeof s.theme === 'string') next.theme = s.theme
+          if (Array.isArray(s.enabled)) next.widgets = s.enabled.filter(x => typeof x === 'string') as string[]
+          if (Array.isArray(s.widget_order)) next.widgetOrder = s.widget_order.filter(x => typeof x === 'string') as string[]
+          if (Array.isArray(s.custom_tags)) next.customTags = s.custom_tags.filter(x => typeof x === 'string') as string[]
+          if (Array.isArray(s.hidden_languages)) next.hiddenLanguages = s.hidden_languages.filter(x => typeof x === 'string') as string[]
+          if (s.widget_settings && typeof s.widget_settings === 'object') {
+            next.widgetSettings = s.widget_settings as PerWidgetSettings
+          }
+          if (Array.isArray(s.achievements)) {
+            next.achievements = s.achievements
+              .filter((a): a is Record<string, unknown> => !!a && typeof a === 'object')
+              .map(a => ({
+                title: typeof a.title === 'string' ? a.title : '',
+                subtitle: typeof a.subtitle === 'string' ? a.subtitle : '',
+                event_date: typeof a.event_date === 'string' ? a.event_date : '',
+                icon: typeof a.icon === 'string' ? a.icon : 'trophy',
+              }))
+          }
+          return next
+        })
+      } catch (e) {
+        if (!aborted.current) console.warn('Settings load failed:', e)
+      }
+    })()
 
     const poll = async () => {
       if (aborted.current) return
