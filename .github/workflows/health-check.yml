@@ -76,35 +76,59 @@ jobs:
       - name: Check widget SVG endpoint
         id: check-widget
         run: |
-          echo "HEAD https://gh-stats.com/ShayManor"
-          HEADERS=$(curl -sI --max-time 30 https://gh-stats.com/ShayManor)
-          echo "$HEADERS"
-          HTTP_CODE=$(printf '%s\n' "$HEADERS" | head -n1 | awk '{print $2}' | tr -d '\r')
-          STATUS=$(printf '%s\n' "$HEADERS" | grep -i '^x-widget-status:' | awk '{print $2}' | tr -d '\r' || true)
+          # Cloudflare routes /api/* to the generator directly. The bare
+          # /<user> and /<user>/<widget>.svg paths land on the SPA shell
+          # in prod, so we probe the canonical /api/<user>/<widget>.svg.
+          URL="https://gh-stats.com/api/ShayManor/grade.svg"
+          echo "GET $URL"
+          HTTP_CODE=$(curl -sS -D /tmp/widget-headers.txt -o /tmp/widget-body.svg \
+                           -w "%{http_code}" --max-time 30 "$URL")
+          echo "HTTP $HTTP_CODE"
+          cat /tmp/widget-headers.txt
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error::Widget endpoint returned HTTP $HTTP_CODE"
             exit 1
           fi
-          # ready | building | rate_limited are healthy; not_found / missing are not.
-          case "$STATUS" in
-            ready|building|rate_limited) echo "X-Widget-Status=$STATUS (ok)";;
-            *) echo "::error::Unexpected X-Widget-Status='$STATUS'"; exit 1;;
+          CT=$(grep -i '^content-type:' /tmp/widget-headers.txt | tail -n1 | awk '{print $2}' | tr -d '\r' || true)
+          case "$CT" in
+            image/svg+xml*) : ;;
+            *) echo "::error::Unexpected Content-Type='$CT' (expected image/svg+xml)"; exit 1;;
           esac
-
-      - name: Check generator API reachable via edge
-        id: check-api
-        run: |
-          # /api/settings/<user> is a lightweight read the edge proxies to
-          # the generator. A 200 or 404 both prove the pipeline is alive;
-          # 5xx / timeout means something is wrong upstream.
-          HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 30 https://gh-stats.com/api/settings/ShayManor)
-          echo "HTTP $HTTP_CODE"
-          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "404" ]; then
-            echo "API reachable (HTTP $HTTP_CODE)"
-          else
-            echo "::error::API returned HTTP $HTTP_CODE"
+          if ! head -c 200 /tmp/widget-body.svg | grep -q '<svg'; then
+            echo "::error::Response body does not look like SVG"
+            head -c 200 /tmp/widget-body.svg; echo
             exit 1
           fi
+          STATUS=$(grep -i '^x-widget-status:' /tmp/widget-headers.txt | tail -n1 | awk '{print $2}' | tr -d '\r' || true)
+          # ready / building / rate_limited are healthy; absent is fine
+          # on cache hits; not_found is a failure.
+          case "$STATUS" in
+            ""|ready|building|rate_limited) echo "X-Widget-Status='${STATUS:-<absent>}' (ok)";;
+            *) echo "::error::Unhealthy X-Widget-Status='$STATUS'"; exit 1;;
+          esac
+
+      - name: Check generator health pipeline
+        id: check-api
+        run: |
+          # Generator's purpose-built liveness probe, routed through
+          # Cloudflare's /api/* rule.
+          URL="https://gh-stats.com/api/health"
+          echo "GET $URL"
+          BODY=$(curl -sS --max-time 30 -w "\n%{http_code}" "$URL")
+          HTTP_CODE=$(printf '%s\n' "$BODY" | tail -n1)
+          JSON=$(printf '%s\n' "$BODY" | sed '$d')
+          echo "HTTP $HTTP_CODE"
+          echo "$JSON"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::/api/health returned HTTP $HTTP_CODE"
+            exit 1
+          fi
+          STATUS=$(printf '%s' "$JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))' 2>/dev/null || echo "")
+          if [ "$STATUS" != "ok" ]; then
+            echo "::error::/api/health reports status='$STATUS' (expected 'ok')"
+            exit 1
+          fi
+          echo "generator pipeline healthy"
 
   notify:
     name: notify-on-failure

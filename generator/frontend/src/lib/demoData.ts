@@ -36,4 +36,12 @@ export const DEMO_WIDGET_DATA: WidgetData = {
     { language: 'Go', percentage: 18, loc: 5 },
     { language: 'Rust', percentage: 12, loc: 3 },
   ],
+  streaks: {
+    current: 12,
+    max: 47,
+    current_start: new Date(Date.now() - 11 * 86400000).toISOString().slice(0, 10),
+    last_active_date: new Date().toISOString().slice(0, 10),
+    max_start: '2024-09-04',
+    max_end: '2024-10-20',
+  },
 }
