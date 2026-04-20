@@ -24,16 +24,31 @@ log = logging.getLogger("generator.worker")
 MAX_ATTEMPTS = 3
 
 
-def _compute_widget_data(payload: dict, settings: dict) -> dict:
-    """Compute raw widget data dict for client-side rendering."""
+def _compute_widget_data(payload: dict, settings: dict, username: str) -> dict:
+    """Compute raw widget data dict for client-side rendering.
+
+    Also persists the user's streak state as a side effect — the longest streak
+    must survive settings-hash rotations, so it lives outside widget_data.
+    """
     custom_tags = settings.get("custom_tags")
     hidden_languages = settings.get("hidden_languages")
+    stored_streak = db.get_user_streak(username)
+    streak = processor.compute_streaks(payload, stored_streak)
+    db.put_user_streak(username, {
+        "current_streak":   streak.current,
+        "current_start":    streak.current_start,
+        "last_active_date": streak.last_active_date,
+        "max_streak":       streak.max,
+        "max_start":        streak.max_start,
+        "max_end":          streak.max_end,
+    })
     return {
         "grade": asdict(processor.compute_grade(payload, custom_tags=custom_tags)),
         "impact": [asdict(w) for w in processor.compute_impact_timeline(payload)],
         "collaborators": [asdict(c) for c in processor.compute_collaborators(payload)],
         "focus": [asdict(f) for f in processor.compute_focus(payload, hidden_languages=hidden_languages)],
         "languages": [asdict(l) for l in processor.compute_languages(payload, hidden_languages=hidden_languages)],
+        "streaks": asdict(streak),
     }
 
 
@@ -41,6 +56,7 @@ def _render_widgets(username: str, payload: dict, settings: dict) -> dict[str, s
     enabled = settings.get("enabled") or config.ENABLED_WIDGETS
     order = settings.get("widget_order") or config.WIDGET_ORDER
     theme = settings.get("theme", "dark")
+    stored_streak = db.get_user_streak(username)
     widgets = processor.generate_widgets_from_github(
         payload,
         theme=theme,
@@ -49,6 +65,7 @@ def _render_widgets(username: str, payload: dict, settings: dict) -> dict[str, s
         enabled=enabled,
         widget_settings=settings.get("widget_settings") or {},
         achievements=settings.get("achievements") or [],
+        stored_streak=stored_streak,
     )
     ordered = [w for w in order if w in enabled and w in widgets and widgets[w]]
     composite = compose_widget(
@@ -81,7 +98,7 @@ def process_one() -> bool:
             db.fail_job(job["id"], "settings missing", retry=False)
             return True
 
-        widget_data = _compute_widget_data(payload, settings_row["settings"])
+        widget_data = _compute_widget_data(payload, settings_row["settings"], username)
         db.put_widget_data(username, settings_row["settings_hash"], widget_data)
         db.point_current_widget(username, settings_row["settings_hash"])
         db.set_last_fetcher_hash(username, result.get("payload_hash", ""))

@@ -79,3 +79,58 @@ def test_worker_marks_failed_after_max_attempts(tmp_dbs):
         row = c.execute("SELECT status, attempts FROM jobs WHERE username='alice'").fetchone()
     assert row["status"] == "failed"
     assert row["attempts"] >= 3
+
+
+def test_process_one_persists_streak(tmp_dbs):
+    """Phase 1 worker must compute and persist the user's streak so max survives
+    future settings changes."""
+    from datetime import date, timedelta
+
+    today = date.today()
+    dates = [today - timedelta(days=i) for i in range(3)]
+    dbmod.enroll("alice", {"theme": "dark", "enabled": ["streaks"]})
+    fake_payload = {
+        "user": {"login": "alice"}, "repos": [], "events": [],
+        "commits": [{"date": d.isoformat(), "count": 1} for d in dates],
+        "total_commits": 3, "recent_commits": 3, "total_prs": 0,
+        "collaborators_data": [], "avatar_b64": "",
+    }
+    with patch("src.worker.fetcher_client.get_data",
+               return_value={"data": fake_payload, "payload_hash": "h1"}):
+        worker.process_one()
+
+    row = dbmod.get_user_streak("alice")
+    assert row is not None
+    assert row["current_streak"] == 3
+    assert row["max_streak"] == 3
+    assert row["last_active_date"] == today.isoformat()
+
+
+def test_process_one_merges_stored_max(tmp_dbs):
+    """A stored max of 50 must survive a refresh whose window max is only 2."""
+    from datetime import date, timedelta
+
+    today = date.today()
+    dbmod.enroll("alice", {"theme": "dark", "enabled": ["streaks"]})
+    dbmod.put_user_streak("alice", {
+        "current_streak": 0, "current_start": "",
+        "last_active_date": "2023-01-15",
+        "max_streak": 50,
+        "max_start": "2023-01-01", "max_end": "2023-02-19",
+    })
+
+    dates = [today - timedelta(days=i) for i in range(2)]
+    fake_payload = {
+        "user": {"login": "alice"}, "repos": [], "events": [],
+        "commits": [{"date": d.isoformat(), "count": 1} for d in dates],
+        "total_commits": 2, "recent_commits": 2, "total_prs": 0,
+        "collaborators_data": [], "avatar_b64": "",
+    }
+    with patch("src.worker.fetcher_client.get_data",
+               return_value={"data": fake_payload, "payload_hash": "h1"}):
+        worker.process_one()
+
+    row = dbmod.get_user_streak("alice")
+    assert row["max_streak"] == 50
+    assert row["max_start"] == "2023-01-01"
+    assert row["current_streak"] == 2
