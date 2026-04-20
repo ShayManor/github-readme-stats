@@ -553,13 +553,76 @@ export function WorkshopScreen({
                             )}
 
                             {w.id === 'achievements' && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-gray-500">Max shown</span>
-                                <NumberStepper
-                                  value={getWidgetSetting('achievements', 'max_items', 5)}
-                                  min={1} max={10}
-                                  onChange={v => updateWidgetSetting('achievements', 'max_items', v)}
-                                />
+                              <div className="flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] text-gray-500">Max shown</span>
+                                  <NumberStepper
+                                    value={getWidgetSetting('achievements', 'max_items', 5)}
+                                    min={1} max={10}
+                                    onChange={v => updateWidgetSetting('achievements', 'max_items', v)}
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                  {settings.achievements.map((ach, aidx) => (
+                                    <div key={aidx} className="p-2.5 rounded-lg border border-gray-100 bg-white">
+                                      <div className="flex items-center gap-1.5 mb-2">
+                                        {ICONS.map(ic => {
+                                          const selected = ach.icon === ic.id
+                                          return (
+                                            <button
+                                              key={ic.id}
+                                              onClick={() => updateAchievement(aidx, 'icon', ic.id)}
+                                              className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
+                                                selected
+                                                  ? 'bg-gray-800 text-white border border-gray-800'
+                                                  : 'bg-white text-gray-500 border border-gray-200 hover:text-gray-800 hover:border-gray-300'
+                                              }`}
+                                              title={ic.id}
+                                              aria-pressed={selected}
+                                            >
+                                              {ic.svg}
+                                            </button>
+                                          )
+                                        })}
+                                        <div className="flex-1" />
+                                        <button
+                                          onClick={() => removeAchievement(aidx)}
+                                          className="text-gray-300 hover:text-red-400 transition-colors text-xs px-1"
+                                          title="Remove"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                      <input
+                                        type="text"
+                                        value={ach.title}
+                                        onChange={e => updateAchievement(aidx, 'title', e.target.value)}
+                                        placeholder="Title (e.g. Hackathon Winner)"
+                                        className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300 mb-1.5"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={ach.subtitle}
+                                        onChange={e => updateAchievement(aidx, 'subtitle', e.target.value)}
+                                        placeholder="Subtitle (e.g. 1st Place · AI Track)"
+                                        className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300 mb-1.5"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={ach.event_date}
+                                        onChange={e => updateAchievement(aidx, 'event_date', e.target.value)}
+                                        placeholder="Date (e.g. 2025-01)"
+                                        className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300"
+                                      />
+                                    </div>
+                                  ))}
+                                  <button
+                                    onClick={addAchievement}
+                                    className="w-full py-2 rounded-lg border border-dashed border-gray-200 text-xs text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-colors"
+                                  >
+                                    + Add achievement
+                                  </button>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -569,74 +632,6 @@ export function WorkshopScreen({
                   })}
                 </div>
               </div>
-
-              {/* Achievements editor */}
-              {settings.widgets.includes('achievements') && (
-                <div className="mb-5">
-                  <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Achievements</div>
-                  <div className="flex flex-col gap-2">
-                    {settings.achievements.map((ach, idx) => (
-                      <div key={idx} className="p-2.5 rounded-lg border border-gray-100 bg-gray-50/50">
-                        <div className="flex items-center gap-1.5 mb-2">
-                          {ICONS.map(ic => {
-                            const selected = ach.icon === ic.id
-                            return (
-                              <button
-                                key={ic.id}
-                                onClick={() => updateAchievement(idx, 'icon', ic.id)}
-                                className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
-                                  selected
-                                    ? 'bg-gray-800 text-white border border-gray-800'
-                                    : 'bg-white text-gray-500 border border-gray-200 hover:text-gray-800 hover:border-gray-300'
-                                }`}
-                                title={ic.id}
-                                aria-pressed={selected}
-                              >
-                                {ic.svg}
-                              </button>
-                            )
-                          })}
-                          <div className="flex-1" />
-                          <button
-                            onClick={() => removeAchievement(idx)}
-                            className="text-gray-300 hover:text-red-400 transition-colors text-xs px-1"
-                            title="Remove"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                        <input
-                          type="text"
-                          value={ach.title}
-                          onChange={e => updateAchievement(idx, 'title', e.target.value)}
-                          placeholder="Title (e.g. Hackathon Winner)"
-                          className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300 mb-1.5"
-                        />
-                        <input
-                          type="text"
-                          value={ach.subtitle}
-                          onChange={e => updateAchievement(idx, 'subtitle', e.target.value)}
-                          placeholder="Subtitle (e.g. 1st Place · AI Track)"
-                          className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300 mb-1.5"
-                        />
-                        <input
-                          type="text"
-                          value={ach.event_date}
-                          onChange={e => updateAchievement(idx, 'event_date', e.target.value)}
-                          placeholder="Date (e.g. 2025-01)"
-                          className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300"
-                        />
-                      </div>
-                    ))}
-                    <button
-                      onClick={addAchievement}
-                      className="w-full py-2 rounded-lg border border-dashed border-gray-200 text-xs text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-colors"
-                    >
-                      + Add achievement
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* Spacer */}
               <div className="flex-1 min-h-4" />
