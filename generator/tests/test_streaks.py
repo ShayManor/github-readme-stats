@@ -106,3 +106,40 @@ def test_compute_streaks_ignores_zero_count_entries(freeze_today):
     s = processor.compute_streaks({"commits": commits}, None)
     assert s.current == 3
     assert s.max == 3
+
+
+from src.widgets import render_streaks_widget
+
+
+def test_render_streaks_contains_values():
+    data = StreakData(
+        current=7, max=42,
+        current_start="2026-04-13", last_active_date="2026-04-19",
+        max_start="2024-03-01", max_end="2024-04-11",
+    )
+    svg = render_streaks_widget(data, theme_name="dark")
+    assert svg.startswith("<svg")
+    assert "</svg>" in svg
+    assert ">7<" in svg
+    assert ">42<" in svg
+    assert "Current" in svg
+    assert "Longest" in svg
+
+
+def test_render_streaks_zero_values_render():
+    data = StreakData(current=0, max=0)
+    svg = render_streaks_widget(data, theme_name="dark")
+    assert ">0<" in svg
+    assert "Current" in svg
+    assert "Longest" in svg
+
+
+def test_render_streaks_hides_dates_when_disabled():
+    data = StreakData(
+        current=7, max=42,
+        current_start="2026-04-13", last_active_date="2026-04-19",
+        max_start="2024-03-01", max_end="2024-04-11",
+    )
+    svg = render_streaks_widget(data, theme_name="dark", settings={"show_dates": False})
+    assert "2026-04-13" not in svg
+    assert "2024-03-01" not in svg
