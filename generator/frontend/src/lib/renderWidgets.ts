@@ -426,8 +426,10 @@ export function renderAllWidgets(opts: {
     widgetSvgs.achievements = renderAchievements(opts.achievements, t, opts.widgetSettings.achievements)
 
   // Compose
-  const totalW = 420, headerH = 60, padding = 20, gap = 16
-  const ordered = opts.widgetOrder.filter(k => enabled.has(k) && widgetSvgs[k])
+  const showName = enabled.has('name')
+  const totalW = 420, headerH = showName ? 60 : 0, padding = 20, gap = 16
+  // "name" is a pseudo-widget — it controls the header, not a rendered svg.
+  const ordered = opts.widgetOrder.filter(k => k !== 'name' && enabled.has(k) && widgetSvgs[k])
 
   const parts = ordered.map(key => {
     const { inner, h } = extractInner(widgetSvgs[key], key)
@@ -437,8 +439,21 @@ export function renderAllWidgets(opts: {
   const contentH = parts.reduce((a, p) => a + p.h, 0) + gap * Math.max(parts.length - 1, 0)
   const totalH = headerH + contentH + padding * 2 + 10
 
-  const avatar = `<circle cx="30" cy="30" r="16" fill="${t.accent}" opacity="0.3"/>`
-  const header = `${avatar}<text x="54" y="38" font-family="${font}" font-size="16" font-weight="700" fill="${t.text}">${esc(opts.username || 'Developer')}</text><line x1="${padding}" y1="${headerH}" x2="${totalW-padding}" y2="${headerH}" stroke="${t.card_border}" stroke-width="0.5"/>`
+  // Header (avatar + username). Only drawn when "name" is enabled. The
+  // avatar pulls from github.com/<user>.png which redirects to
+  // avatars.githubusercontent.com; the accent circle underneath is a
+  // fallback for missing users / slow loads.
+  let header = ''
+  if (showName) {
+    const avatarUrl = opts.username
+      ? `https://github.com/${encodeURIComponent(opts.username)}.png?size=64`
+      : ''
+    const avatarImg = avatarUrl
+      ? `<image x="14" y="14" width="32" height="32" href="${esc(avatarUrl)}" clip-path="url(#mainAvatarClip)" preserveAspectRatio="xMidYMid slice"/>`
+      : ''
+    const avatar = `<defs><clipPath id="mainAvatarClip"><circle cx="30" cy="30" r="16"/></clipPath></defs><circle cx="30" cy="30" r="16" fill="${t.accent}" opacity="0.3"/>${avatarImg}`
+    header = `${avatar}<text x="54" y="38" font-family="${font}" font-size="16" font-weight="700" fill="${t.text}">${esc(opts.username || 'Developer')}</text><line x1="${padding}" y1="${headerH}" x2="${totalW-padding}" y2="${headerH}" stroke="${t.card_border}" stroke-width="0.5"/>`
+  }
 
   let yOffset = headerH + padding
   let embedded = ''

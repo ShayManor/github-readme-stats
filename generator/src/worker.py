@@ -67,10 +67,18 @@ def _render_widgets(username: str, payload: dict, settings: dict) -> dict[str, s
         achievements=settings.get("achievements") or [],
         stored_streak=stored_streak,
     )
-    ordered = [w for w in order if w in enabled and w in widgets and widgets[w]]
+    enabled_set = set(enabled)
+    show_name = "name" in enabled_set
+    # Preserve "name" in the ordered list so the composite honors its
+    # user-ordered position (always 0 today, but future-proof).
+    ordered = [
+        w for w in order
+        if w in enabled_set and (w == "name" or (w in widgets and widgets[w]))
+    ]
     composite = compose_widget(
         widgets=widgets, enabled=ordered, theme_name=theme,
         username=username, avatar_b64=payload.get("avatar_b64", ""),
+        show_name=show_name,
     )
     out = {name: svg for name, svg in widgets.items() if svg}
     out["composite"] = composite
@@ -111,6 +119,29 @@ def process_one() -> bool:
         db.fail_job(job["id"], str(e)[:500], retry=retry)
         log.warning("prefetch failed for %s (retry=%s): %s", username, retry, e)
         return True
+
+
+def render_composite_adhoc(username: str, override_settings: dict) -> str | None:
+    """Render the composite SVG for `username` using stored settings merged
+    with the per-request `override_settings`. Does NOT persist anything.
+
+    Used by the public `GET /api/<u>?...` endpoint so unauthenticated visitors
+    can preview/embed a widget configured purely via query string, without
+    touching the owner's stored settings.
+
+    Returns the SVG string, or None if the user isn't enrolled / the fetcher
+    has no data for them (caller should fall through to the cached path).
+    """
+    settings_row = db.get_settings(username)
+    if settings_row is None:
+        return None
+    result = fetcher_client.get_data(username)
+    payload = result.get("data") or {}
+    if not payload or payload.get("error") == "not_found":
+        return None
+    effective = {**settings_row["settings"], **(override_settings or {})}
+    widgets = _render_widgets(username, payload, effective)
+    return widgets.get("composite")
 
 
 def render_widgets_now(username: str) -> dict[str, str]:

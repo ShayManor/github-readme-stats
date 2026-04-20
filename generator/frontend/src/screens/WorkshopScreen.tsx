@@ -25,15 +25,21 @@ const SVG_SANITIZE_CONFIG = {
   ],
 }
 
+// Mini-preview swatches (bg + card + accent). Flat-color swatches all read
+// the same dark/light — showing the accent color is what actually separates
+// Midnight (blue) from Onyx (purple) from Nord (cyan), etc.
 const THEMES = [
-  { id: 'midnight', label: 'Midnight', color: '#121820' },
-  { id: 'onyx', label: 'Onyx', color: '#09090b' },
-  { id: 'nord', label: 'Nord', color: '#1e2433' },
-  { id: 'clean', label: 'Clean', color: '#ffffff', border: true },
-  { id: 'paper', label: 'Paper', color: '#faf8f5', border: true },
+  { id: 'midnight', label: 'Midnight', bg: '#121820', card: '#1a2230', border: '#2a3444', accent: '#58a6ff', light: false },
+  { id: 'onyx',     label: 'Onyx',     bg: '#09090b', card: '#18181b', border: '#27272a', accent: '#a78bfa', light: false },
+  { id: 'nord',     label: 'Nord',     bg: '#1e2433', card: '#2a3142', border: '#3d4659', accent: '#88c0d0', light: false },
+  { id: 'clean',    label: 'Clean',    bg: '#ffffff', card: '#f6f8fa', border: '#d8dee4', accent: '#0969da', light: true  },
+  { id: 'paper',    label: 'Paper',    bg: '#faf8f5', card: '#f5f0eb', border: '#e0d8cf', accent: '#b45309', light: true  },
 ]
 
 const ALL_WIDGETS = [
+  // "name" is the avatar + username header. Pinned at the top — can be
+  // toggled off but never reordered. Keep this entry first.
+  { id: 'name', label: 'Name' },
   { id: 'grade', label: 'Grade' },
   { id: 'impact', label: 'Impact Timeline' },
   { id: 'streaks', label: 'Streaks' },
@@ -75,8 +81,12 @@ const ICONS: { id: string; svg: ReactNode }[] = [
     id: 'medal',
     svg: (
       <svg {...ICON_SVG_PROPS}>
-        <circle cx="12" cy="8" r="6" />
-        <path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526" />
+        <path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15" />
+        <path d="M11 12 5.12 2.2" />
+        <path d="m13 12 5.88-9.8" />
+        <path d="M8 7h8" />
+        <circle cx="12" cy="17" r="5" />
+        <path d="M12 18v-2h-.5" />
       </svg>
     ),
   },
@@ -199,7 +209,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (v: string)
           key={c}
           onClick={() => onChange(c)}
           className={`w-5 h-5 rounded-full transition-all ${
-            value === c ? 'ring-2 ring-offset-1 ring-blue-500' : 'hover:ring-1 hover:ring-gray-300'
+            value === c ? 'ring-2 ring-offset-1 ring-gray-900' : 'hover:ring-1 hover:ring-gray-300'
           }`}
           style={{ backgroundColor: c }}
         />
@@ -243,9 +253,13 @@ export function WorkshopScreen({
   // the stored order forgot. Keeps the UI functional if ALL_WIDGETS
   // gains or loses an entry between releases.
   const knownIds = useMemo(() => new Set(ALL_WIDGETS.map(w => w.id)), [])
+  // "name" is pinned at index 0 regardless of persisted order. We still keep
+  // it in orderedIds so the composite-render path can find it, but the drag
+  // UI below treats it as non-reorderable.
   const orderedIds = useMemo(() => {
     const seen = new Set<string>()
-    const out: string[] = []
+    const out: string[] = ['name']
+    seen.add('name')
     for (const id of settings.widgetOrder) {
       if (knownIds.has(id) && !seen.has(id)) { seen.add(id); out.push(id) }
     }
@@ -257,6 +271,8 @@ export function WorkshopScreen({
 
   const moveWidget = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || from >= orderedIds.length || to >= orderedIds.length) return
+    // Never move "name" and never drop another widget above it (index 0).
+    if (orderedIds[from] === 'name' || to === 0) return
     const next = orderedIds.slice()
     const [item] = next.splice(from, 1)
     next.splice(to, 0, item)
@@ -367,15 +383,23 @@ export function WorkshopScreen({
                       key={t.id}
                       onClick={() => updateSetting('theme', t.id)}
                       title={t.label}
-                      className={`w-9 h-9 rounded-lg transition-all ${
+                      aria-label={t.label}
+                      className={`w-9 h-9 rounded-lg overflow-hidden transition-all ${
                         settings.theme === t.id
-                          ? 'ring-2 ring-blue-500 ring-offset-2'
-                          : t.border
-                            ? 'border border-gray-200 hover:border-gray-300'
-                            : 'hover:ring-1 hover:ring-gray-300 hover:ring-offset-1'
+                          ? 'ring-2 ring-gray-900 ring-offset-2'
+                          : t.light
+                            ? 'ring-1 ring-gray-200 hover:ring-gray-300'
+                            : 'hover:ring-1 hover:ring-gray-400 hover:ring-offset-1'
                       }`}
-                      style={{ backgroundColor: t.color }}
-                    />
+                    >
+                      <svg viewBox="0 0 36 36" width="36" height="36">
+                        <rect width="36" height="36" rx="8" fill={t.bg} />
+                        <rect x="6" y="8" width="24" height="20" rx="4" fill={t.card} stroke={t.border} strokeWidth="1" />
+                        <circle cx="11" cy="18" r="3" fill={t.accent} />
+                        <rect x="16" y="16.25" width="10" height="1.75" rx="0.875" fill={t.accent} opacity="0.75" />
+                        <rect x="16" y="19.75" width="7" height="1.5" rx="0.75" fill={t.accent} opacity="0.35" />
+                      </svg>
+                    </button>
                   ))}
                 </div>
                 <div className="text-[10px] text-gray-400 mt-1.5">
@@ -393,24 +417,28 @@ export function WorkshopScreen({
                     const enabled = settings.widgets.includes(w.id)
                     const hasAdvanced = ['grade', 'impact', 'streaks', 'collaborators', 'focus', 'languages', 'achievements'].includes(w.id)
                     const isExpanded = expandedWidget === w.id && enabled
-                    const isDragging = dragIndex === idx
-                    const showDropLineAbove = dropIndex === idx && dragIndex !== null && dragIndex !== idx
+                    // "name" is pinned — no drag affordance, no drop lines.
+                    // The dropIndex comparisons below still use the real idx
+                    // so downstream rows behave normally when name is skipped.
+                    const isPinned = w.id === 'name'
+                    const isDragging = !isPinned && dragIndex === idx
+                    const showDropLineAbove = !isPinned && idx > 0 && dropIndex === idx && dragIndex !== null && dragIndex !== idx
                     // Drop-line below the last row when dragging past the end.
-                    const showDropLineBelow = idx === orderedIds.length - 1 && dropIndex === orderedIds.length && dragIndex !== null
+                    const showDropLineBelow = !isPinned && idx === orderedIds.length - 1 && dropIndex === orderedIds.length && dragIndex !== null
 
                     return (
                       <div key={w.id}>
-                        {showDropLineAbove && <div className="h-0.5 bg-blue-400 rounded-full mx-2 mb-0.5" />}
+                        {showDropLineAbove && <div className="h-0.5 bg-gray-900 rounded-full mx-2 mb-0.5" />}
                         <div
                           className={`flex items-center transition-opacity ${isDragging ? 'opacity-40' : ''}`}
-                          draggable
-                          onDragStart={e => {
+                          draggable={!isPinned}
+                          onDragStart={isPinned ? undefined : e => {
                             setDragIndex(idx)
                             e.dataTransfer.effectAllowed = 'move'
                             // Firefox needs some payload to start a drag.
                             e.dataTransfer.setData('text/plain', String(idx))
                           }}
-                          onDragOver={e => {
+                          onDragOver={isPinned ? undefined : e => {
                             if (dragIndex === null) return
                             e.preventDefault()
                             e.dataTransfer.dropEffect = 'move'
@@ -427,7 +455,7 @@ export function WorkshopScreen({
                               setDropIndex(target)
                             }
                           }}
-                          onDrop={e => {
+                          onDrop={isPinned ? undefined : e => {
                             e.preventDefault()
                             if (dragIndex === null || dropIndex === null) {
                               setDragIndex(null); setDropIndex(null); return
@@ -438,15 +466,28 @@ export function WorkshopScreen({
                             moveWidget(dragIndex, to)
                             setDragIndex(null); setDropIndex(null)
                           }}
-                          onDragEnd={() => { setDragIndex(null); setDropIndex(null) }}
+                          onDragEnd={isPinned ? undefined : () => { setDragIndex(null); setDropIndex(null) }}
                         >
-                          <span
-                            className="px-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing select-none"
-                            title="Drag to reorder"
-                            aria-hidden
-                          >
-                            ⋮⋮
-                          </span>
+                          {isPinned ? (
+                            <span
+                              className="px-1 text-gray-300 select-none"
+                              title="Pinned — can't be reordered"
+                              aria-hidden
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="11" width="18" height="10" rx="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                              </svg>
+                            </span>
+                          ) : (
+                            <span
+                              className="px-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing select-none"
+                              title="Drag to reorder"
+                              aria-hidden
+                            >
+                              ⋮⋮
+                            </span>
+                          )}
                           <button
                             onClick={() => toggleWidget(w.id)}
                             className={`flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors text-left ${
@@ -455,7 +496,7 @@ export function WorkshopScreen({
                                 : 'text-gray-400 hover:text-gray-500 hover:bg-gray-50/50'
                             }`}
                           >
-                            <div className={`w-3.5 h-3.5 rounded flex-shrink-0 transition-colors ${enabled ? 'bg-blue-500' : 'bg-gray-200'}`} />
+                            <div className={`w-3.5 h-3.5 rounded flex-shrink-0 transition-colors ${enabled ? 'bg-gray-900' : 'bg-gray-200'}`} />
                             {w.label}
                           </button>
                           {hasAdvanced && enabled && (
@@ -468,7 +509,7 @@ export function WorkshopScreen({
                             </button>
                           )}
                         </div>
-                        {showDropLineBelow && <div className="h-0.5 bg-blue-400 rounded-full mx-2 mt-0.5" />}
+                        {showDropLineBelow && <div className="h-0.5 bg-gray-900 rounded-full mx-2 mt-0.5" />}
 
                         {isExpanded && (
                           <div className="ml-6 mt-1 mb-2 p-2.5 rounded-lg bg-gray-50/80 border border-gray-100 flex flex-col gap-2.5">

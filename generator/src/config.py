@@ -55,10 +55,11 @@ DATA_SOURCE_TYPE = os.getenv("DATA_SOURCE", "direct")
 """Data source type: 'direct' for immediate API calls, 'queued' for batch processing."""
 
 # Widget settings
-WIDGET_ORDER = ["grade", "impact", "streaks", "collaborators", "focus", "languages", "achievements"]
-"""Default order of widgets. Customize by reordering this list."""
+WIDGET_ORDER = ["name", "grade", "impact", "streaks", "collaborators", "focus", "languages", "achievements"]
+"""Default order of widgets. "name" is the avatar+username header and is
+always pinned first in the UI — it can be toggled off but not reordered."""
 
-ENABLED_WIDGETS = ["grade", "impact", "streaks", "collaborators", "focus", "languages", "achievements"]
+ENABLED_WIDGETS = ["name", "grade", "impact", "streaks", "collaborators", "focus", "languages", "achievements"]
 """Which widgets to display. Remove any you don't want to show."""
 
 # Language filtering

@@ -137,6 +137,16 @@ def test_login_rejects_external_next(api_client):
         assert s.get("oauth_next") == "/"
 
 
+@pytest.mark.parametrize("bad_next", ["//evil.example", "//evil.example/x", "/\\evil.example"])
+def test_login_rejects_protocol_relative_next(api_client, bad_next):
+    # Browsers resolve //host and /\host against the current scheme, so these
+    # are open-redirect vectors even though they start with "/".
+    r = api_client.get(f"/api/auth/github/login?next={bad_next}")
+    assert r.status_code in (302, 303)
+    with api_client.session_transaction() as s:
+        assert s.get("oauth_next") == "/"
+
+
 def test_callback_state_mismatch_400(api_client):
     with api_client.session_transaction() as s:
         s["oauth_state"] = "correct"

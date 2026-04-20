@@ -40,20 +40,29 @@ def compose_widget(
     theme_name: str = "dark",
     username: str = "",
     avatar_b64: str = "",
+    show_name: bool = True,
 ) -> str:
     """
     Takes rendered SVG strings for each widget type and composes them
     into a single unified profile widget by inlining widget SVGs directly.
+
+    `show_name` controls whether the avatar + username header block is
+    drawn. It's the "name" pseudo-widget — pinned first in the UI, can be
+    toggled off but not reordered. When false, widgets start at the top
+    edge (minus the standard padding) so there's no orphan gap.
     """
     t = THEMES[theme_name]
     total_w = 420
-    header_h = 60
+    header_h = 60 if show_name else 0
     padding = 20
     gap = 16
 
-    # Extract inner content from each widget SVG
+    # Extract inner content from each widget SVG. "name" has no rendered
+    # widget — it maps to the header block and is consumed by show_name.
     parts = []
     for key in enabled:
+        if key == "name":
+            continue
         if key in widgets and widgets[key]:
             inner, h = _extract_inner(widgets[key], key)
             parts.append((key, inner, h))
@@ -61,16 +70,16 @@ def compose_widget(
     content_h = sum(h for _, _, h in parts) + gap * max(len(parts) - 1, 0)
     total_h = header_h + content_h + padding * 2 + 10
 
-    # Header
-    avatar_svg = ""
-    if avatar_b64:
-        avatar_svg = f'''
+    # Header (avatar + username). Only drawn when "name" is enabled.
+    header = ""
+    if show_name:
+        if avatar_b64:
+            avatar_svg = f'''
     <defs><clipPath id="mainAvatarClip"><circle cx="30" cy="30" r="16"/></clipPath></defs>
     <image x="14" y="14" width="32" height="32" href="data:image/png;base64,{avatar_b64}" clip-path="url(#mainAvatarClip)"/>'''
-    else:
-        avatar_svg = f'<circle cx="30" cy="30" r="16" fill="{t["accent"]}" opacity="0.3"/>'
-
-    header = f'''
+        else:
+            avatar_svg = f'<circle cx="30" cy="30" r="16" fill="{t["accent"]}" opacity="0.3"/>'
+        header = f'''
     {avatar_svg}
     <text x="54" y="38" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
           font-size="16" font-weight="700" fill="{t["text"]}">{escape(username or "Developer")}</text>

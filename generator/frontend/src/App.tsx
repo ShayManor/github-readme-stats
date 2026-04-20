@@ -7,6 +7,7 @@ import { AuthButton } from './components/AuthButton'
 import type { WidgetData } from './lib/renderWidgets'
 import { DEMO_WIDGET_DATA } from './lib/demoData'
 import { fetchMe, type Me } from './lib/auth'
+import { buildEmbedUrl } from './lib/settingsQuery'
 
 export type Achievement = {
   title: string
@@ -38,8 +39,8 @@ export type WidgetSettings = {
 
 const DEFAULT_SETTINGS: WidgetSettings = {
   theme: 'midnight',
-  widgets: ['grade', 'impact', 'streaks', 'collaborators', 'focus', 'languages'],
-  widgetOrder: ['grade', 'impact', 'streaks', 'collaborators', 'focus', 'languages', 'achievements'],
+  widgets: ['name', 'grade', 'impact', 'streaks', 'collaborators', 'focus', 'languages'],
+  widgetOrder: ['name', 'grade', 'impact', 'streaks', 'collaborators', 'focus', 'languages', 'achievements'],
   impactPeriod: '6mo',
   customTags: [],
   hiddenLanguages: [],
@@ -65,6 +66,11 @@ export default function App() {
   const [generatedSvg, setGeneratedSvg] = useState<string | null>(null)
   const [generateError, setGenerateError] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
+  // The URL we actually fetched for the preview — also the one we show as
+  // the embed snippet. For owners this is /api/<u> (backed by stored
+  // settings). For visitors it's /api/<u>?<query>, which round-trips their
+  // Workshop edits without touching the owner's saved widget.
+  const [embedUrl, setEmbedUrl] = useState<string>('')
   const pollTimer = useRef<number | null>(null)
   const pollStart = useRef<number>(0)
   const aborted = useRef(false)
@@ -185,53 +191,76 @@ export default function App() {
     setGenerating(true)
     setGeneratedSvg(null)
     setGenerateError(null)
+    const isOwner = !!me.login && me.login.toLowerCase() === username.toLowerCase()
     try {
-      // Push the user's Workshop choices to the backend BEFORE rendering.
-      // The backend's /generate endpoint re-reads settings from SQLite and
-      // renders with them, so without this PATCH the SVG would reflect
-      // whatever was last persisted (usually the enroll-time defaults)
-      // rather than the user's current selections.
-      const backendSettings = {
-        theme: settings.theme,
-        enabled: settings.widgets,
-        widget_order: settings.widgetOrder,
-        custom_tags: settings.customTags,
-        hidden_languages: settings.hiddenLanguages,
-        widget_settings: settings.widgetSettings,
-        achievements: settings.achievements.filter(a => a.title.trim()),
-      }
-      const patchRes = await fetch(`/api/${encodeURIComponent(username)}/settings`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(backendSettings),
-      })
-      if (!patchRes.ok && patchRes.status !== 404) {
-        setGenerateError(`Settings sync failed (HTTP ${patchRes.status})`)
-        return
-      }
+      if (isOwner) {
+        // Owner path: persist settings, then force a server-side render
+        // against the stored payload. The resulting /api/<u> is the embed.
+        const backendSettings = {
+          theme: settings.theme,
+          enabled: settings.widgets,
+          widget_order: settings.widgetOrder,
+          custom_tags: settings.customTags,
+          hidden_languages: settings.hiddenLanguages,
+          widget_settings: settings.widgetSettings,
+          achievements: settings.achievements.filter(a => a.title.trim()),
+        }
+        const patchRes = await fetch(`/api/${encodeURIComponent(username)}/settings`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(backendSettings),
+        })
+        if (!patchRes.ok && patchRes.status !== 404) {
+          setGenerateError(`Settings sync failed (HTTP ${patchRes.status})`)
+          return
+        }
 
-      const r = await fetch(`/api/${encodeURIComponent(username)}/generate`, {
-        method: 'POST',
-        credentials: 'include',
-      })
-      if (r.status === 404) {
-        const body = await r.json().catch(() => ({} as { status?: string }))
-        setGenerateError(body.status === 'not_found' ? 'User not found' : 'Not enrolled')
-        return
+        const r = await fetch(`/api/${encodeURIComponent(username)}/generate`, {
+          method: 'POST',
+          credentials: 'include',
+        })
+        if (r.status === 404) {
+          const body = await r.json().catch(() => ({} as { status?: string }))
+          setGenerateError(body.status === 'not_found' ? 'User not found' : 'Not enrolled')
+          return
+        }
+        if (!r.ok) {
+          setGenerateError(`Generate failed (HTTP ${r.status})`)
+          return
+        }
+        const cleanUrl = `${window.location.origin}/api/${encodeURIComponent(username)}`
+        // Cache-bust so regenerate after settings change shows the new
+        // version, not a stale browser copy. The cache-busting `t` param
+        // is not read server-side (not in the allow-list) so the render
+        // stays cacheable at the edge.
+        const svgRes = await fetch(`${cleanUrl}?t=${Date.now()}`)
+        if (!svgRes.ok) {
+          setGenerateError(`SVG fetch failed (HTTP ${svgRes.status})`)
+          return
+        }
+        setGeneratedSvg(await svgRes.text())
+        setEmbedUrl(cleanUrl)
+      } else {
+        // Visitor path: encode Workshop edits into a query string and hit
+        // the same URL we'll hand the user for their README. No owner
+        // settings are written. The backend renders ad-hoc against the
+        // fetcher's cached payload for this user.
+        const url = buildEmbedUrl(window.location.origin, username, settings)
+        // Same cache-bust trick — unknown query params are ignored by the
+        // sanitizer, so this doesn't alter the rendered output.
+        const svgRes = await fetch(`${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`)
+        if (svgRes.status === 404) {
+          setGenerateError('User not enrolled — ask them to sign in and generate first')
+          return
+        }
+        if (!svgRes.ok) {
+          setGenerateError(`SVG fetch failed (HTTP ${svgRes.status})`)
+          return
+        }
+        setGeneratedSvg(await svgRes.text())
+        setEmbedUrl(url)
       }
-      if (!r.ok) {
-        setGenerateError(`Generate failed (HTTP ${r.status})`)
-        return
-      }
-      // Fetch the backend-rendered composite SVG. Cache-bust so regenerate
-      // after settings change shows the new version, not a stale browser copy.
-      const svgRes = await fetch(`/api/${encodeURIComponent(username)}?t=${Date.now()}`)
-      if (!svgRes.ok) {
-        setGenerateError(`SVG fetch failed (HTTP ${svgRes.status})`)
-        return
-      }
-      setGeneratedSvg(await svgRes.text())
     } catch (e) {
       console.warn('generate call failed:', e)
       setGenerateError('Network error')
@@ -277,6 +306,7 @@ export default function App() {
           generating={generating}
           generatedSvg={generatedSvg}
           generateError={generateError}
+          embedUrl={embedUrl}
           onBack={handleBack}
           onRegenerate={handleGenerate}
         />
