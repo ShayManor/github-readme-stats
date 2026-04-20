@@ -204,7 +204,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="header-bar">
+      <div className="fixed right-4 top-4 z-50">
         <AuthButton me={me} onChange={setMe} />
       </div>
       {step === 'search' && (
