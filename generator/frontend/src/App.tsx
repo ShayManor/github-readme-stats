@@ -164,7 +164,10 @@ export default function App() {
         return
       }
 
-      const r = await fetch(`/api/${encodeURIComponent(username)}/generate`, { method: 'POST' })
+      const r = await fetch(`/api/${encodeURIComponent(username)}/generate`, {
+        method: 'POST',
+        credentials: 'include',
+      })
       if (r.status === 404) {
         const body = await r.json().catch(() => ({} as { status?: string }))
         setGenerateError(body.status === 'not_found' ? 'User not found' : 'Not enrolled')
