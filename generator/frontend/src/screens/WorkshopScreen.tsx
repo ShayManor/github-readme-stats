@@ -36,6 +36,7 @@ const THEMES = [
 const ALL_WIDGETS = [
   { id: 'grade', label: 'Grade' },
   { id: 'impact', label: 'Impact Timeline' },
+  { id: 'streaks', label: 'Streaks' },
   { id: 'collaborators', label: 'Top Collaborators' },
   { id: 'focus', label: 'Recent Focus' },
   { id: 'languages', label: 'Languages' },
@@ -285,7 +286,7 @@ export function WorkshopScreen({
       data: widgetData,
       theme: settings.theme,
       widgets: settings.widgets,
-      widgetOrder: ['grade', 'impact', 'collaborators', 'focus', 'languages', 'achievements'],
+      widgetOrder: ['grade', 'impact', 'streaks', 'collaborators', 'focus', 'languages', 'achievements'],
       achievements: settings.achievements,
       widgetSettings: settings.widgetSettings,
       hiddenLanguages: settings.hiddenLanguages,
@@ -360,7 +361,7 @@ export function WorkshopScreen({
                 <div className="flex flex-col gap-0.5">
                   {ALL_WIDGETS.map(w => {
                     const enabled = settings.widgets.includes(w.id)
-                    const hasAdvanced = ['grade', 'impact', 'collaborators', 'focus', 'languages', 'achievements'].includes(w.id)
+                    const hasAdvanced = ['grade', 'impact', 'streaks', 'collaborators', 'focus', 'languages', 'achievements'].includes(w.id)
                     const isExpanded = expandedWidget === w.id && enabled
 
                     return (
@@ -408,6 +409,25 @@ export function WorkshopScreen({
                                   value={getWidgetSetting('impact', 'line_color', '#58a6ff')}
                                   onChange={v => updateWidgetSetting('impact', 'line_color', v)}
                                 />
+                              </div>
+                            )}
+
+                            {w.id === 'streaks' && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-gray-500">Show dates</span>
+                                <button
+                                  onClick={() => updateWidgetSetting('streaks', 'show_dates', !getWidgetSetting('streaks', 'show_dates', true))}
+                                  className={`w-8 h-4 rounded-full transition-colors relative ${
+                                    getWidgetSetting('streaks', 'show_dates', true) ? 'bg-blue-500' : 'bg-gray-300'
+                                  }`}
+                                  aria-pressed={getWidgetSetting('streaks', 'show_dates', true)}
+                                >
+                                  <span
+                                    className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+                                      getWidgetSetting('streaks', 'show_dates', true) ? 'translate-x-4' : 'translate-x-0.5'
+                                    }`}
+                                  />
+                                </button>
                               </div>
                             )}
 

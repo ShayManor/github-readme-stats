@@ -13,6 +13,11 @@ export type CollaboratorData = { username: string; shared_repos: number; shared_
 export type FocusCategory = { category: string; percentage: number; commit_count: number }
 export type LanguageData = { language: string; percentage: number; loc: number }
 export type AchievementInput = { title: string; subtitle: string; event_date: string; icon: string }
+export type StreakData = {
+  current: number; max: number
+  current_start?: string; last_active_date?: string
+  max_start?: string; max_end?: string
+}
 
 export type WidgetData = {
   grade?: GradeData
@@ -20,11 +25,13 @@ export type WidgetData = {
   collaborators?: CollaboratorData[]
   focus?: FocusCategory[]
   languages?: LanguageData[]
+  streaks?: StreakData
 }
 
 export type PerWidgetSettings = {
   grade?: { max_tags?: number }
   impact?: { line_color?: string }
+  streaks?: { show_dates?: boolean }
   collaborators?: { max_count?: number; bar_color?: string }
   focus?: { max_categories?: number }
   languages?: { max_languages?: number }
@@ -247,6 +254,64 @@ function renderLanguages(languages: LanguageData[], t: Theme, s?: { max_language
   return cardWrapper(inner, 380, rowsH + 36, t, 'Languages')
 }
 
+const STREAKS_FLAME_PATH = 'M12 2c1 4 5 5 5 10a5 5 0 1 1-10 0c0-2 1-3 2-4 0 1 1 2 2 2 -1-2 0-5 1-8z'
+
+function streaksFlame(color: string): string {
+  return `<path d="${STREAKS_FLAME_PATH}" fill="${color}" opacity="0.95"/>`
+}
+
+function streaksTrophy(color: string): string {
+  return (
+    `<path d="M6 3h12v3a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V3z" fill="none" stroke="${color}" stroke-width="1.6"/>` +
+    `<path d="M4 4h2v2a2 2 0 0 1-2 2H3V5a1 1 0 0 1 1-1zM20 4h-2v2a2 2 0 0 0 2 2h1V5a1 1 0 0 0-1-1z" fill="none" stroke="${color}" stroke-width="1.4"/>` +
+    `<rect x="9" y="11" width="6" height="3" fill="${color}"/>` +
+    `<rect x="7" y="14" width="10" height="2" rx="0.5" fill="${color}"/>`
+  )
+}
+
+const STREAK_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+function fmtStreakDate(iso?: string): string {
+  if (!iso) return ''
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!m) return ''
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3])
+  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return ''
+  return `${STREAK_MONTHS[mo-1]} ${String(d).padStart(2, '0')}, ${y}`
+}
+function fmtStreakRange(start?: string, end?: string): string {
+  const s = fmtStreakDate(start), e = fmtStreakDate(end)
+  if (s && e) return `${s} – ${e}`
+  return s || e
+}
+
+function renderStreaks(data: StreakData, t: Theme, s?: { show_dates?: boolean }): string {
+  const showDates = s?.show_dates !== false
+  const width = 380, height = 170
+  const colW = width / 2
+  const currentColor = t.accent
+  const maxColor = t.text
+
+  const currentSub = data.current_start ? fmtStreakDate(data.current_start) : '—'
+  const maxSub = (data.max_start || data.max_end) ? fmtStreakRange(data.max_start, data.max_end) : ''
+  const currentLine = data.current > 0 ? `since ${currentSub}` : ''
+
+  const dateLines = showDates ? `
+    <text x="${colW / 2}" y="130" text-anchor="middle" font-family="${font}" font-size="9" fill="${t.text_secondary}">${esc(currentLine)}</text>
+    <text x="${colW + colW / 2}" y="130" text-anchor="middle" font-family="${font}" font-size="9" fill="${t.text_secondary}">${esc(maxSub)}</text>` : ''
+
+  const inner = `
+    <g transform="translate(${colW / 2 - 12}, 14)">${streaksFlame(currentColor)}</g>
+    <text x="${colW / 2}" y="78" text-anchor="middle" font-family="${font}" font-size="40" font-weight="800" fill="${currentColor}">${data.current}</text>
+    <text x="${colW / 2}" y="108" text-anchor="middle" font-family="${font}" font-size="11" fill="${t.text_secondary}" letter-spacing="0.5">Current Streak</text>
+    <line x1="${colW}" y1="24" x2="${colW}" y2="${height - 60}" stroke="${t.grid}" stroke-width="1"/>
+    <g transform="translate(${colW + colW / 2 - 12}, 14)">${streaksTrophy(maxColor)}</g>
+    <text x="${colW + colW / 2}" y="78" text-anchor="middle" font-family="${font}" font-size="40" font-weight="800" fill="${maxColor}">${data.max}</text>
+    <text x="${colW + colW / 2}" y="108" text-anchor="middle" font-family="${font}" font-size="11" fill="${t.text_secondary}" letter-spacing="0.5">Longest Streak</text>
+    ${dateLines}`
+
+  return cardWrapper(inner, width, height, t, '')
+}
+
 function achievementIconSvg(iconType: string, color: string): string {
   // Mirrors generator/src/widgets/achievements.py::_achievement_icon_svg so
   // the Workshop client preview matches the backend-rendered composite.
@@ -316,6 +381,8 @@ export function renderAllWidgets(opts: {
     widgetSvgs.grade = renderGrade(opts.data.grade, t, opts.widgetSettings.grade)
   if (enabled.has('impact') && opts.data.impact)
     widgetSvgs.impact = renderImpact(opts.data.impact, t, opts.widgetSettings.impact)
+  if (enabled.has('streaks') && opts.data.streaks)
+    widgetSvgs.streaks = renderStreaks(opts.data.streaks, t, opts.widgetSettings.streaks)
   if (enabled.has('collaborators') && opts.data.collaborators)
     widgetSvgs.collaborators = renderCollaborators(opts.data.collaborators, t, opts.widgetSettings.collaborators)
   if (enabled.has('focus') && opts.data.focus)

@@ -18,6 +18,7 @@ export type Achievement = {
 export type PerWidgetSettings = {
   grade?: { max_tags?: number }
   impact?: { line_color?: string }
+  streaks?: { show_dates?: boolean }
   collaborators?: { max_count?: number; bar_color?: string }
   focus?: { max_categories?: number }
   languages?: { max_languages?: number }
@@ -36,7 +37,7 @@ export type WidgetSettings = {
 
 const DEFAULT_SETTINGS: WidgetSettings = {
   theme: 'midnight',
-  widgets: ['grade', 'impact', 'collaborators', 'focus', 'languages'],
+  widgets: ['grade', 'impact', 'streaks', 'collaborators', 'focus', 'languages'],
   impactPeriod: '6mo',
   customTags: [],
   hiddenLanguages: [],

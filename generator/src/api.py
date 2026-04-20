@@ -184,7 +184,7 @@ app.config["MAX_CONTENT_LENGTH"] = 128 * 1024
 # ["max_count"])` raise, or by ballooning the DB with unbounded fields.
 # We normalize to an explicit allow-list of fields and coerce/trim types.
 
-_ALLOWED_WIDGETS = {"grade", "impact", "collaborators", "focus", "languages", "achievements"}
+_ALLOWED_WIDGETS = {"grade", "impact", "streaks", "collaborators", "focus", "languages", "achievements"}
 _ALLOWED_ICONS = {"trophy", "medal", "star", "hackathon"}
 _MAX_ACHIEVEMENTS = 10
 _TITLE_MAX = 80
@@ -240,6 +240,7 @@ def _coerce_widget_settings(v) -> dict:
     allowed = {
         "grade": {"max_tags": "int"},
         "impact": {"line_color": "color"},
+        "streaks": {"show_dates": "bool"},
         "collaborators": {"max_count": "int", "bar_color": "color"},
         "focus": {"max_categories": "int"},
         "languages": {"max_languages": "int"},
@@ -259,6 +260,8 @@ def _coerce_widget_settings(v) -> dict:
                     clean[key] = int(val)
                 except (TypeError, ValueError):
                     continue
+            elif kind == "bool":
+                clean[key] = bool(val)
             elif kind == "color":
                 # Deep color validation happens in the widget renderer
                 # (safe_color). Here we only reject obviously wrong types
