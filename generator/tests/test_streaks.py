@@ -143,3 +143,38 @@ def test_render_streaks_hides_dates_when_disabled():
     svg = render_streaks_widget(data, theme_name="dark", settings={"show_dates": False})
     assert "2026-04-13" not in svg
     assert "2024-03-01" not in svg
+
+
+def test_generate_widgets_includes_streaks_when_enabled(freeze_today):
+    from datetime import timedelta
+    dates = [freeze_today - timedelta(days=i) for i in range(4)]
+    payload = {
+        "user": {"login": "alice"},
+        "repos": [],
+        "events": [],
+        "commits": _days(dates),
+        "total_commits": 4, "recent_commits": 4, "total_prs": 0,
+        "collaborators_data": [],
+    }
+    widgets = processor.generate_widgets_from_github(
+        payload, theme="dark", enabled=["streaks"],
+    )
+    assert "streaks" in widgets
+    assert ">4<" in widgets["streaks"]
+
+
+def test_generate_widgets_uses_stored_streak(freeze_today):
+    payload = {
+        "user": {"login": "alice"}, "repos": [], "events": [],
+        "commits": [],
+        "total_commits": 0, "recent_commits": 0, "total_prs": 0,
+        "collaborators_data": [],
+    }
+    stored = {
+        "max_streak": 99, "max_start": "2022-01-01", "max_end": "2022-04-09",
+        "current_streak": 0, "current_start": "", "last_active_date": "",
+    }
+    widgets = processor.generate_widgets_from_github(
+        payload, theme="dark", enabled=["streaks"], stored_streak=stored,
+    )
+    assert ">99<" in widgets["streaks"]

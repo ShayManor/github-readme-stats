@@ -20,6 +20,7 @@ from .widgets import (
     render_focus_widget,
     render_languages_widget,
     render_achievements_widget,
+    render_streaks_widget,
 )
 
 
@@ -651,6 +652,7 @@ def generate_widgets_from_github(
     enabled: list[str] = None,
     widget_settings: dict[str, dict] | None = None,
     achievements: list[dict] | None = None,
+    stored_streak: dict | None = None,
 ) -> dict[str, str]:
     """
     Takes raw GitHub API data and returns rendered SVG strings
@@ -665,6 +667,8 @@ def generate_widgets_from_github(
             Defaults to ENABLED_WIDGETS from config.
         widget_settings: Optional per-widget settings dict, keyed by widget name.
             Each value is a dict of settings for that widget's renderer.
+        stored_streak: Optional dict from db.get_user_streak(username); carries
+            the all-time longest streak forward across refreshes.
     """
     from .config import ENABLED_WIDGETS
 
@@ -694,6 +698,10 @@ def generate_widgets_from_github(
     if "languages" in enabled_set:
         languages = compute_languages(github_data, hidden_languages=hidden_languages)
         widgets["languages"] = render_languages_widget(languages, theme, settings=ws.get("languages"))
+
+    if "streaks" in enabled_set:
+        streak = compute_streaks(github_data, stored_streak)
+        widgets["streaks"] = render_streaks_widget(streak, theme, settings=ws.get("streaks"))
 
     if "achievements" in enabled_set:
         # User-authored content — no GitHub data involved.
