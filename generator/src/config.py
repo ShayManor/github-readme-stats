@@ -47,10 +47,10 @@ DATA_SOURCE_TYPE = os.getenv("DATA_SOURCE", "direct")
 """Data source type: 'direct' for immediate API calls, 'queued' for batch processing."""
 
 # Widget settings
-WIDGET_ORDER = ["grade", "impact", "collaborators", "focus", "languages", "achievements"]
+WIDGET_ORDER = ["grade", "impact", "streaks", "collaborators", "focus", "languages", "achievements"]
 """Default order of widgets. Customize by reordering this list."""
 
-ENABLED_WIDGETS = ["grade", "impact", "collaborators", "focus", "languages", "achievements"]
+ENABLED_WIDGETS = ["grade", "impact", "streaks", "collaborators", "focus", "languages", "achievements"]
 """Which widgets to display. Remove any you don't want to show."""
 
 # Language filtering
