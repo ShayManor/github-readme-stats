@@ -37,6 +37,7 @@ services:
       GH_OAUTH_CLIENT_SECRET: ${GH_OAUTH_CLIENT_SECRET:?missing GH_OAUTH_CLIENT_SECRET}
       GENERATOR_SECRET_KEY: ${GENERATOR_SECRET_KEY:?missing GENERATOR_SECRET_KEY}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://gh-stats.com}
+      BUILD_VERSION: ${IMAGE_TAG:-}
     volumes:
       - ${HOME}/ghstats/data/generator:/app/data
     ports:
@@ -52,6 +53,7 @@ services:
     environment:
       FETCHER_URL: http://fetcher:5001
       FETCHER_INTERNAL_TOKEN: ${FETCHER_INTERNAL_TOKEN:?missing FETCHER_INTERNAL_TOKEN}
+      BUILD_VERSION: ${IMAGE_TAG:-}
     volumes:
       - ${HOME}/ghstats/data/generator:/app/data
     depends_on:
@@ -65,6 +67,7 @@ services:
     environment:
       FETCHER_URL: http://fetcher:5001
       FETCHER_INTERNAL_TOKEN: ${FETCHER_INTERNAL_TOKEN:?missing FETCHER_INTERNAL_TOKEN}
+      BUILD_VERSION: ${IMAGE_TAG:-}
     volumes:
       - ${HOME}/ghstats/data/generator:/app/data
     depends_on:

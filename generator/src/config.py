@@ -42,6 +42,14 @@ COMMIT_PER_REPO = int(os.getenv("COMMIT_PER_REPO", "30"))
 API_TIMEOUT = int(os.getenv("API_TIMEOUT", "5"))
 """Timeout in seconds for API requests."""
 
+# Deploy / invalidation.
+# When set (populated from IMAGE_TAG in deploy/compose.yml), every generator
+# container compares this to the persisted 'widgets_built_version' on boot;
+# if it changed, all enrolled users get a fresh build job queued so widgets
+# re-render against the new code. Empty string disables the check — useful
+# in local dev where a restart shouldn't invalidate the cache.
+BUILD_VERSION = os.getenv("BUILD_VERSION", "").strip()
+
 # Data source
 DATA_SOURCE_TYPE = os.getenv("DATA_SOURCE", "direct")
 """Data source type: 'direct' for immediate API calls, 'queued' for batch processing."""

@@ -144,6 +144,16 @@ def render_widgets_now(username: str) -> dict[str, str]:
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     db.init_dbs()
+    # If this boot is the first container to see a new BUILD_VERSION,
+    # enqueue a rebuild for every enrolled user. claim_build_version is
+    # atomic so racing with the api/cron containers is safe.
+    if config.BUILD_VERSION:
+        try:
+            if db.claim_build_version(config.BUILD_VERSION):
+                n = db.enqueue_build_all()
+                log.info("build %s: queued %d rebuild(s)", config.BUILD_VERSION, n)
+        except Exception:
+            log.exception("build-version invalidation failed")
     while True:
         db.reclaim_stuck_jobs(older_than_minutes=10)
         if not process_one():

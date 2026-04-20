@@ -635,8 +635,27 @@ def _too_large(_e):
     return jsonify({"error": "payload_too_large"}), 413
 
 
+def _invalidate_widgets_on_new_build() -> None:
+    """On boot, if BUILD_VERSION differs from the last stamp, queue a
+    rebuild for every enrolled user so widgets re-render against the new
+    code. Races safely with the worker/cron containers: the first caller
+    to flip the meta row enqueues; the rest observe a no-op.
+    """
+    if not config.BUILD_VERSION:
+        return
+    try:
+        if db.claim_build_version(config.BUILD_VERSION):
+            n = db.enqueue_build_all()
+            log.info("build %s: queued %d rebuild(s)", config.BUILD_VERSION, n)
+    except Exception:
+        # Never let a failed invalidation prevent the API from booting —
+        # the next boot (or a manual refresh) will pick up the change.
+        log.exception("build-version invalidation failed")
+
+
 def main():
     db.init_dbs()
+    _invalidate_widgets_on_new_build()
     app.run(host="0.0.0.0", port=config.PORT)
 
 

@@ -111,9 +111,19 @@ function renderGrade(data: GradeData, t: Theme, s?: { max_tags?: number }): stri
   const tagPad = tagsH > 24 ? 18 : 14
   const cardH = tags.length ? tagsY + tagsH + tagPad : statsY + 54
 
-  let inner = `<g transform="translate(52, 48)"><circle cx="0" cy="0" r="${radius}" fill="none" stroke="${t.grid}" stroke-width="5"/><circle cx="0" cy="0" r="${radius}" fill="none" stroke="${color}" stroke-width="5" stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}" stroke-linecap="round" transform="rotate(-90)"/><text x="0" y="-4" text-anchor="middle" dominant-baseline="middle" font-family="${font}" font-size="${gf}" font-weight="800" fill="${color}">${esc(data.grade)}</text><text x="0" y="18" text-anchor="middle" font-family="${font}" font-size="11" fill="${t.text_secondary}">${data.score.toFixed(0)} / 100</text></g>
+  const breakdownLabels: Record<string, string> = {
+    commits: 'Commits', consistency: 'Consistency', repos: 'Repos',
+    stars: 'Stars', forks: 'Forks', activity: 'Activity', followers: 'Followers',
+  }
+  const topStrengths = Object.entries(data.breakdown || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([k]) => breakdownLabels[k] ?? k.charAt(0).toUpperCase() + k.slice(1))
+  const strengthsLine = topStrengths.length ? `Strong in ${topStrengths.join(' · ')}` : ''
+
+  let inner = `<g transform="translate(52, 48)"><circle cx="0" cy="0" r="${radius}" fill="none" stroke="${t.grid}" stroke-width="5"/><circle cx="0" cy="0" r="${radius}" fill="none" stroke="${color}" stroke-width="5" stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}" stroke-linecap="round" transform="rotate(-90)"/><text x="0" y="2" text-anchor="middle" dominant-baseline="middle" font-family="${font}" font-size="${gf}" font-weight="800" fill="${color}">${esc(data.grade)}</text></g>
     <line x1="100" y1="16" x2="100" y2="80" stroke="${t.grid}" stroke-width="1"/>
-    <g transform="translate(114, 26)"><text x="0" y="10" font-family="${font}" font-size="16" font-weight="700" fill="${t.text}">Developer Profile</text><text x="0" y="28" font-family="${font}" font-size="11" fill="${t.text_secondary}">Grade <tspan fill="${color}" font-weight="700">${esc(data.grade)}</tspan> · ${data.score.toFixed(0)}/100</text></g>
+    <g transform="translate(114, 26)"><text x="0" y="10" font-family="${font}" font-size="16" font-weight="700" fill="${t.text}">Developer Profile</text><text x="0" y="32" font-family="${font}" font-size="11" fill="${t.text_secondary}">${esc(strengthsLine)}</text><text x="0" y="50" font-family="${font}" font-size="10" letter-spacing="0.4" fill="${t.text_secondary}">Score <tspan fill="${t.text}" font-weight="600">${data.score.toFixed(0)}</tspan> / 100</text></g>
     <line x1="20" y1="${statsY-4}" x2="360" y2="${statsY-4}" stroke="${t.grid}" stroke-width="0.5"/>
     <g transform="translate(20, ${statsY})">${statsSvg}</g>`
 

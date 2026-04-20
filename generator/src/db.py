@@ -44,6 +44,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_pending ON jobs(status, created_at);
+CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS user_streaks (
     username         TEXT PRIMARY KEY,
     current_streak   INTEGER NOT NULL DEFAULT 0,
@@ -334,6 +338,59 @@ def enqueue_build(username: str) -> int:
         )
         c.commit()
         return cur.lastrowid
+
+
+def enqueue_build_all() -> int:
+    """Enqueue a 'build' job for every enrolled user that doesn't already
+    have one pending. Returns the number inserted. Idempotent — safe to
+    call from whichever generator container boots first after a deploy.
+    """
+    now = _now()
+    with _settings_conn() as c:
+        c.execute("BEGIN IMMEDIATE")
+        cur = c.execute(
+            """INSERT INTO jobs(kind, username, status, created_at, updated_at)
+               SELECT 'build', u.username, 'pending', ?, ?
+               FROM users u
+               WHERE NOT EXISTS (
+                   SELECT 1 FROM jobs j
+                   WHERE j.username = u.username
+                     AND j.kind = 'build'
+                     AND j.status IN ('pending', 'running')
+               )""",
+            (now, now),
+        )
+        inserted = cur.rowcount or 0
+        c.commit()
+        return inserted
+
+
+def claim_build_version(version: str) -> bool:
+    """Atomically stamp the 'widgets_built_version' meta row. Returns True
+    iff this call changed it (the caller should then enqueue rebuilds);
+    False if it already matched — i.e. another container on this host
+    already claimed this deploy.
+
+    Uses BEGIN IMMEDIATE so racing generator/worker/cron containers
+    serialize and only one observes the change.
+    """
+    if not version:
+        return False
+    with _settings_conn() as c:
+        c.execute("BEGIN IMMEDIATE")
+        row = c.execute(
+            "SELECT value FROM meta WHERE key='widgets_built_version'"
+        ).fetchone()
+        if row and row["value"] == version:
+            c.commit()
+            return False
+        c.execute(
+            """INSERT INTO meta(key, value) VALUES('widgets_built_version', ?)
+               ON CONFLICT(key) DO UPDATE SET value=excluded.value""",
+            (version,),
+        )
+        c.commit()
+        return True
 
 
 def pending_job_count() -> int:

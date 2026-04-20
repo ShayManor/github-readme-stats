@@ -9,6 +9,26 @@ from ..utils import escape, card_wrapper, icon_svg
 # → "ML Engineer", not "Ml Engineer").
 _TAG_ACRONYMS = {"ml", "ai", "ui", "ux", "api", "cli", "sql", "css", "html", "js", "ios"}
 
+# Human-readable names for the breakdown factors `compute_grade` emits. Used in
+# the subtitle's "Strong in ..." callout to surface the two highest-scoring
+# pillars of the grade — real info instead of repeating the letter + score.
+_BREAKDOWN_LABELS = {
+    "commits": "Commits",
+    "consistency": "Consistency",
+    "repos": "Repos",
+    "stars": "Stars",
+    "forks": "Forks",
+    "activity": "Activity",
+    "followers": "Followers",
+}
+
+
+def _top_strengths(breakdown: dict | None, n: int = 2) -> list[str]:
+    if not breakdown:
+        return []
+    ranked = sorted(breakdown.items(), key=lambda kv: kv[1], reverse=True)
+    return [_BREAKDOWN_LABELS.get(k, k.capitalize()) for k, _ in ranked[:n]]
+
 
 def _format_tag_label(tag: str) -> str:
     # Custom tags may define an explicit label in src/tag_rules.py::TAG_DEFS.
@@ -107,6 +127,9 @@ def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dic
     tag_padding = 18 if tags_h > 24 else 14
     card_h = (tags_y + tags_h + tag_padding) if data.tags else (stats_y + 54)
 
+    strengths = _top_strengths(data.breakdown)
+    strengths_line = f"Strong in {' · '.join(strengths)}" if strengths else ""
+
     inner = f'''
     <g transform="translate(52, 48)">
       <circle cx="0" cy="0" r="{radius}" fill="none" stroke="{t["grid"]}" stroke-width="5"/>
@@ -115,18 +138,18 @@ def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dic
               stroke-linecap="round" transform="rotate(-90)">
         <animate attributeName="stroke-dashoffset" from="{circumference}" to="{offset}" dur="1s" fill="freeze"/>
       </circle>
-      <text x="0" y="-4" text-anchor="middle" dominant-baseline="middle"
+      <text x="0" y="2" text-anchor="middle" dominant-baseline="middle"
             font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
             font-size="{grade_font}" font-weight="800" fill="{color}">{escape(data.grade)}</text>
-      <text x="0" y="18" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
-            font-size="11" fill="{t["text_secondary"]}">{score:.0f} / 100</text>
     </g>
     <line x1="100" y1="16" x2="100" y2="80" stroke="{t["grid"]}" stroke-width="1"/>
     <g transform="translate(114, 26)">
       <text x="0" y="10" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
             font-size="16" font-weight="700" fill="{t["text"]}">Developer Profile</text>
-      <text x="0" y="28" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
-            font-size="11" fill="{t["text_secondary"]}">Grade <tspan fill="{color}" font-weight="700">{escape(data.grade)}</tspan> · {score:.0f}/100</text>
+      <text x="0" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" fill="{t["text_secondary"]}">{strengths_line}</text>
+      <text x="0" y="50" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="{t["text_secondary"]}" letter-spacing="0.4">Score <tspan fill="{t["text"]}" font-weight="600">{score:.0f}</tspan> / 100</text>
     </g>
     <line x1="20" y1="{stats_y - 4}" x2="360" y2="{stats_y - 4}" stroke="{t["grid"]}" stroke-width="0.5"/>
     <g transform="translate(20, {stats_y})">
