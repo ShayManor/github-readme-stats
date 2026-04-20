@@ -249,6 +249,65 @@ def test_enroll_endpoint_is_gone(client):
     assert r.status_code == 405
 
 
+def test_query_override_triggers_adhoc_render_without_persisting(client):
+    """GET /api/<u>?theme=... renders on-demand via worker.render_composite_adhoc
+    and does not mutate the stored settings blob — this is the path visitors
+    use to embed a customized widget of someone else's profile."""
+    dbmod.enroll("alice", {"theme": "midnight"})
+    dbmod.put_widgets("alice", "h1", {"composite": "<svg>cached</svg>"})
+    dbmod.point_current_widget("alice", "h1")
+
+    captured = {}
+
+    def fake_adhoc(username, overrides):
+        captured["username"] = username
+        captured["overrides"] = overrides
+        return "<svg>adhoc</svg>"
+
+    with patch("src.worker.render_composite_adhoc", side_effect=fake_adhoc):
+        r = client.get("/api/alice?theme=onyx&widgets=name,grade")
+
+    assert r.status_code == 200
+    assert r.headers["X-Widget-Status"] == "ready"
+    assert r.headers["Cache-Control"] == "public, max-age=300"
+    assert b"<svg>adhoc</svg>" in r.data
+    assert captured["username"] == "alice"
+    assert captured["overrides"]["theme"] == "onyx"
+    assert captured["overrides"]["enabled"] == ["name", "grade"]
+    # Stored settings must remain untouched.
+    assert dbmod.get_settings("alice")["settings"]["theme"] == "midnight"
+
+
+def test_query_override_without_params_uses_cached_composite(client):
+    """No query params → fast path serves the pre-rendered composite from
+    widgets.db. Ad-hoc render must not be invoked."""
+    dbmod.enroll("alice", {"theme": "midnight"})
+    dbmod.put_widgets("alice", "h1", {"composite": "<svg>cached</svg>"})
+    dbmod.point_current_widget("alice", "h1")
+
+    with patch("src.worker.render_composite_adhoc") as adhoc:
+        r = client.get("/api/alice")
+        assert adhoc.call_count == 0
+
+    assert r.status_code == 200
+    assert r.headers["X-Widget-Status"] == "ready"
+    assert b"<svg>cached</svg>" in r.data
+
+
+def test_query_override_ignores_unknown_params(client):
+    """Keys not in the allow-list are dropped by sanitize_settings_query so
+    bogus query strings don't trigger the expensive ad-hoc path."""
+    dbmod.enroll("alice", {"theme": "midnight"})
+    dbmod.put_widgets("alice", "h1", {"composite": "<svg>cached</svg>"})
+    dbmod.point_current_widget("alice", "h1")
+
+    with patch("src.worker.render_composite_adhoc") as adhoc:
+        r = client.get("/api/alice?nonsense=1&t=12345")
+        assert adhoc.call_count == 0
+
+    assert b"<svg>cached</svg>" in r.data
+
+
 def test_per_login_mutate_rate_limit(client, monkeypatch):
     """Per-login rate limit on mutate routes allows up to MAX requests,
     then rejects with 429."""

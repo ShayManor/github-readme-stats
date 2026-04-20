@@ -14,15 +14,20 @@ type Props = {
   generating: boolean
   generatedSvg: string | null
   generateError: string | null
+  // Owner renders embed as /api/<u>; visitors get /api/<u>?<their settings>.
+  // We display whichever URL was used to produce the SVG above, so the
+  // snippet they copy matches what they're previewing.
+  embedUrl: string
   onBack: () => void
   onRegenerate: () => void
 }
 
-export function ResultScreen({ username, generating, generatedSvg, generateError, onBack, onRegenerate }: Props) {
+export function ResultScreen({ username, generating, generatedSvg, generateError, embedUrl, onBack, onRegenerate }: Props) {
   const safeSvg = useMemo(() => (generatedSvg ? sanitizeSvg(generatedSvg) : ''), [generatedSvg])
   const [copied, setCopied] = useState(false)
-  const embedUrl = `${window.location.origin}/api/${encodeURIComponent(username)}`
-  const embedSnippet = `![${username}](${embedUrl})`
+  const fallbackUrl = `${window.location.origin}/api/${encodeURIComponent(username)}`
+  const finalUrl = embedUrl || fallbackUrl
+  const embedSnippet = `![${username}](${finalUrl})`
 
   const copy = async () => {
     try {
