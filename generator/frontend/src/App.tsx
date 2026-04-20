@@ -28,6 +28,7 @@ export type PerWidgetSettings = {
 export type WidgetSettings = {
   theme: string
   widgets: string[]
+  widgetOrder: string[]
   impactPeriod: string
   customTags: string[]
   hiddenLanguages: string[]
@@ -38,6 +39,7 @@ export type WidgetSettings = {
 const DEFAULT_SETTINGS: WidgetSettings = {
   theme: 'midnight',
   widgets: ['grade', 'impact', 'streaks', 'collaborators', 'focus', 'languages'],
+  widgetOrder: ['grade', 'impact', 'streaks', 'collaborators', 'focus', 'languages', 'achievements'],
   impactPeriod: '6mo',
   customTags: [],
   hiddenLanguages: [],
@@ -149,6 +151,7 @@ export default function App() {
       const backendSettings = {
         theme: settings.theme,
         enabled: settings.widgets,
+        widget_order: settings.widgetOrder,
         custom_tags: settings.customTags,
         hidden_languages: settings.hiddenLanguages,
         widget_settings: settings.widgetSettings,

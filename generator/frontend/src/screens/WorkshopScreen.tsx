@@ -234,6 +234,34 @@ export function WorkshopScreen({
 }: Props) {
   const canEdit = !!me.login && me.login.toLowerCase() === username.toLowerCase()
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null)
+  // Index being dragged + index currently hovered (for drop-line indicator).
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [dropIndex, setDropIndex] = useState<number | null>(null)
+
+  // Build the render-order list from settings.widgetOrder, tolerating
+  // stale persisted data: drop unknown ids, append any known widgets
+  // the stored order forgot. Keeps the UI functional if ALL_WIDGETS
+  // gains or loses an entry between releases.
+  const knownIds = useMemo(() => new Set(ALL_WIDGETS.map(w => w.id)), [])
+  const orderedIds = useMemo(() => {
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const id of settings.widgetOrder) {
+      if (knownIds.has(id) && !seen.has(id)) { seen.add(id); out.push(id) }
+    }
+    for (const w of ALL_WIDGETS) {
+      if (!seen.has(w.id)) { seen.add(w.id); out.push(w.id) }
+    }
+    return out
+  }, [settings.widgetOrder, knownIds])
+
+  const moveWidget = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= orderedIds.length || to >= orderedIds.length) return
+    const next = orderedIds.slice()
+    const [item] = next.splice(from, 1)
+    next.splice(to, 0, item)
+    onSettingsChange({ ...settings, widgetOrder: next })
+  }
 
   const updateSetting = <K extends keyof WidgetSettings>(key: K, val: WidgetSettings[K]) => {
     onSettingsChange({ ...settings, [key]: val })
@@ -286,14 +314,14 @@ export function WorkshopScreen({
       data: widgetData,
       theme: settings.theme,
       widgets: settings.widgets,
-      widgetOrder: ['grade', 'impact', 'streaks', 'collaborators', 'focus', 'languages', 'achievements'],
+      widgetOrder: orderedIds,
       achievements: settings.achievements,
       widgetSettings: settings.widgetSettings,
       hiddenLanguages: settings.hiddenLanguages,
       username,
     })
     return DOMPurify.sanitize(raw, SVG_SANITIZE_CONFIG)
-  }, [widgetData, settings, username])
+  }, [widgetData, settings, username, orderedIds])
 
   return (
     <div className="min-h-screen animate-fade-in-up">
@@ -359,14 +387,66 @@ export function WorkshopScreen({
               <div className="mb-5">
                 <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Widgets</div>
                 <div className="flex flex-col gap-0.5">
-                  {ALL_WIDGETS.map(w => {
+                  {orderedIds.map((id, idx) => {
+                    const w = ALL_WIDGETS.find(x => x.id === id)
+                    if (!w) return null
                     const enabled = settings.widgets.includes(w.id)
                     const hasAdvanced = ['grade', 'impact', 'streaks', 'collaborators', 'focus', 'languages', 'achievements'].includes(w.id)
                     const isExpanded = expandedWidget === w.id && enabled
+                    const isDragging = dragIndex === idx
+                    const showDropLineAbove = dropIndex === idx && dragIndex !== null && dragIndex !== idx
+                    // Drop-line below the last row when dragging past the end.
+                    const showDropLineBelow = idx === orderedIds.length - 1 && dropIndex === orderedIds.length && dragIndex !== null
 
                     return (
                       <div key={w.id}>
-                        <div className="flex items-center">
+                        {showDropLineAbove && <div className="h-0.5 bg-blue-400 rounded-full mx-2 mb-0.5" />}
+                        <div
+                          className={`flex items-center transition-opacity ${isDragging ? 'opacity-40' : ''}`}
+                          draggable
+                          onDragStart={e => {
+                            setDragIndex(idx)
+                            e.dataTransfer.effectAllowed = 'move'
+                            // Firefox needs some payload to start a drag.
+                            e.dataTransfer.setData('text/plain', String(idx))
+                          }}
+                          onDragOver={e => {
+                            if (dragIndex === null) return
+                            e.preventDefault()
+                            e.dataTransfer.dropEffect = 'move'
+                            // Midpoint decides whether the drop slot is this row
+                            // or the next — gives a predictable feel between rows.
+                            const rect = e.currentTarget.getBoundingClientRect()
+                            const after = e.clientY - rect.top > rect.height / 2
+                            const target = after ? idx + 1 : idx
+                            // Landing on the drag source's own slot is a no-op;
+                            // hide the indicator so it doesn't look interactive.
+                            if (target === dragIndex || target === dragIndex + 1) {
+                              setDropIndex(null)
+                            } else {
+                              setDropIndex(target)
+                            }
+                          }}
+                          onDrop={e => {
+                            e.preventDefault()
+                            if (dragIndex === null || dropIndex === null) {
+                              setDragIndex(null); setDropIndex(null); return
+                            }
+                            // Removing the source before inserting shifts later
+                            // indices down by one — adjust the target accordingly.
+                            const to = dropIndex > dragIndex ? dropIndex - 1 : dropIndex
+                            moveWidget(dragIndex, to)
+                            setDragIndex(null); setDropIndex(null)
+                          }}
+                          onDragEnd={() => { setDragIndex(null); setDropIndex(null) }}
+                        >
+                          <span
+                            className="px-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing select-none"
+                            title="Drag to reorder"
+                            aria-hidden
+                          >
+                            ⋮⋮
+                          </span>
                           <button
                             onClick={() => toggleWidget(w.id)}
                             className={`flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors text-left ${
@@ -388,6 +468,7 @@ export function WorkshopScreen({
                             </button>
                           )}
                         </div>
+                        {showDropLineBelow && <div className="h-0.5 bg-blue-400 rounded-full mx-2 mt-0.5" />}
 
                         {isExpanded && (
                           <div className="ml-6 mt-1 mb-2 p-2.5 rounded-lg bg-gray-50/80 border border-gray-100 flex flex-col gap-2.5">
