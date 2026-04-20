@@ -1,6 +1,6 @@
 """GitHub data processing and widget generation."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from collections import defaultdict
 
 from .models import (
@@ -65,15 +65,45 @@ def compute_grade(github_data: dict, custom_tags: list[str] = None) -> GradeData
     if prs == 0:
         prs = sum(1 for ev in events if ev.get("type") == "PullRequestEvent")
 
-    scores = {
-        "repos": min(repo_count / 30 * 100, 100),
-        "stars": min(stars / 200 * 100, 100),
-        "forks": min(forks / 50 * 100, 100),
-        "followers": min(followers / 100 * 100, 100),
-        "activity": min(len(events) / 80 * 100, 100),
-    }
+    # Last-year consistency: count distinct ISO weeks with at least one
+    # commit on the GitHub contribution calendar (which always covers the
+    # trailing year). 40 active weeks out of ~52 tops this factor out, so
+    # someone who works in bursts isn't penalised, but sporadic once-a-
+    # quarter activity scores low.
+    daily = github_data.get("commits", [])
+    active_weeks: set = set()
+    if isinstance(daily, list):
+        for day in daily:
+            if not isinstance(day, dict):
+                continue
+            if day.get("count", 0) <= 0:
+                continue
+            date_str = day.get("date")
+            if not isinstance(date_str, str):
+                continue
+            try:
+                iso = date.fromisoformat(date_str).isocalendar()
+                active_weeks.add((iso[0], iso[1]))
+            except ValueError:
+                continue
+    consistency_score = min(len(active_weeks) / 40 * 100, 100)
 
-    total = sum(scores.values()) / len(scores)
+    # Weights sum to 1.0. Commits dominates (the user's actual output),
+    # consistency is the second-biggest (rewards sustained work over the
+    # last year, not just lifetime totals). Stars is softened two ways:
+    # its weight drops from 0.20 to 0.12, and the cap rises from 200 to
+    # 300 so each individual star contributes less to maxing the factor.
+    per_factor = {
+        "commits":     (min(commits / 2000 * 100, 100),      0.33),
+        "consistency": (consistency_score,                   0.22),
+        "repos":       (min(repo_count / 30 * 100, 100),     0.15),
+        "stars":       (min(stars / 300 * 100, 100),         0.12),
+        "forks":       (min(forks / 50 * 100, 100),          0.08),
+        "activity":    (min(len(events) / 80 * 100, 100),    0.07),
+        "followers":   (min(followers / 100 * 100, 100), 0.03),
+    }
+    scores = {k: v for k, (v, _w) in per_factor.items()}
+    total = sum(v * w for v, w in per_factor.values())
 
     # Grade scale
     if total >= 97:

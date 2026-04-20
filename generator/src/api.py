@@ -240,7 +240,7 @@ def _coerce_widget_settings(v) -> dict:
     allowed = {
         "grade": {"max_tags": "int"},
         "impact": {"line_color": "color"},
-        "streaks": {"show_dates": "bool"},
+        "streaks": {"color": "color"},
         "collaborators": {"max_count": "int", "bar_color": "color"},
         "focus": {"max_categories": "int"},
         "languages": {"max_languages": "int"},
