@@ -237,5 +237,7 @@ screenshots/
 
 # Kept locally, not tracked
 /CLAUDE.md
-/docs/superpowers/plans/
-/docs/superpowers/specs/
+/docs/
+**/*.md
+!README.md
+!**/README.md

@@ -8,24 +8,20 @@ your account, charts your contribution timeline, highlights your top
 collaborators, breaks down your languages, and earns you tags like
 `Backend`, `ML`, or `Founder #42`.
 
-![hero widget](https://your-instance.example.com/ShayManor)
-
-> **Set your instance URL.** Replace `your-instance.example.com` in
-> every example below with wherever you (or someone you trust) have
-> deployed this. See [Self-hosting](#self-hosting) to run your own.
+![hero widget](https://gh-stats.com/ShayManor)
 
 ---
 
 ## Get your widget in 30 seconds
 
-1. Open `https://your-instance.example.com/` in a browser.
+1. Open `https://gh-stats.com/` in a browser.
 2. Type your GitHub username and hit **Continue**.
 3. Pick a theme, reorder widgets, add custom tags / achievements.
 4. Click **Generate** — the SVG is built on the server and cached.
 5. Copy the one-liner and paste it into your profile README:
 
    ```markdown
-   ![my stats](https://your-instance.example.com/YOUR_USERNAME)
+   ![my stats](https://gh-stats.com/YOUR_USERNAME)
    ```
 
 That's it. Every push of GitHub activity is picked up by a 15-minute
@@ -62,7 +58,7 @@ Pass `?theme=<name>` or pick in the Workshop. Five built-ins:
 | `paper` | warm off-white |
 
 ```markdown
-![my stats](https://your-instance.example.com/YOUR_USERNAME?theme=onyx)
+![my stats](https://gh-stats.com/YOUR_USERNAME?theme=onyx)
 ```
 
 ---
@@ -72,20 +68,20 @@ Pass `?theme=<name>` or pick in the Workshop. Five built-ins:
 Don't want the full composite? Embed exactly one:
 
 ```markdown
-![grade](https://your-instance.example.com/YOUR_USERNAME/grade.svg)
-![impact](https://your-instance.example.com/YOUR_USERNAME/impact.svg)
-![collaborators](https://your-instance.example.com/YOUR_USERNAME/collaborators.svg)
-![focus](https://your-instance.example.com/YOUR_USERNAME/focus.svg)
-![languages](https://your-instance.example.com/YOUR_USERNAME/languages.svg)
-![achievements](https://your-instance.example.com/YOUR_USERNAME/achievements.svg)
+![grade](https://gh-stats.com/YOUR_USERNAME/grade.svg)
+![impact](https://gh-stats.com/YOUR_USERNAME/impact.svg)
+![collaborators](https://gh-stats.com/YOUR_USERNAME/collaborators.svg)
+![focus](https://gh-stats.com/YOUR_USERNAME/focus.svg)
+![languages](https://gh-stats.com/YOUR_USERNAME/languages.svg)
+![achievements](https://gh-stats.com/YOUR_USERNAME/achievements.svg)
 ```
 
 Put two side-by-side with an HTML table:
 
 ```html
 <table><tr>
-  <td><img src="https://your-instance.example.com/YOUR_USERNAME/grade.svg"/></td>
-  <td><img src="https://your-instance.example.com/YOUR_USERNAME/languages.svg"/></td>
+  <td><img src="https://gh-stats.com/YOUR_USERNAME/grade.svg"/></td>
+  <td><img src="https://gh-stats.com/YOUR_USERNAME/languages.svg"/></td>
 </tr></table>
 ```
 
@@ -111,7 +107,7 @@ against your username, so re-embedding picks them up automatically.
 
 - `Founder #N` — one of the first N enrolled users, with your number
 - (plus anything your languages / topics map to: `Backend`, `Frontend`,
-  `ML`, `Mobile`, `DevOps`, `Security`, `Cloud`, …)
+  `ML`, `Mobile`, `DevOps`, `Cloud`, …)
 
 ---
 
@@ -178,7 +174,7 @@ the edge and you're done.
 
 ### Capacity knobs
 
-Tuned for a single mini PC by default. All overridable via env:
+Sensible defaults; all overridable via env:
 
 | Env | Default | What it bounds |
 |---|---|---|
@@ -190,9 +186,6 @@ Tuned for a single mini PC by default. All overridable via env:
 | `RATE_LIMIT_MUTATE_MAX` | `120` per 60s | Per-IP settings edits / generates |
 | `RATE_LIMIT_ENROLL_MAX` | `60` per 300s | Per-IP new enrollments |
 | `EDGE_RATE_LIMIT_MAX` | `3000` per 60s | Per-IP at the edge |
-
-See [`docs/security-audit-2026-04-18.md`](docs/security-audit-2026-04-18.md)
-for the full rationale.
 
 ---
 
