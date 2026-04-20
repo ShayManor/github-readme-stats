@@ -2,6 +2,7 @@ import os, tempfile, pytest
 from unittest.mock import patch
 from src import db as dbmod
 from src import api as apimod
+from src import config as cfg
 
 
 @pytest.fixture
@@ -13,10 +14,16 @@ def client(monkeypatch):
         monkeypatch.setattr(dbmod, "SETTINGS_DB_PATH", os.path.join(d, "s.db"))
         monkeypatch.setattr(dbmod, "WIDGETS_DB_PATH", os.path.join(d, "w.db"))
         dbmod.init_dbs()
+        # Configure OAuth fixture with allowed origins and insecure cookies for testing.
+        monkeypatch.setattr(cfg, "ALLOWED_ORIGINS", ("https://gh-stats.com",))
         app = apimod.app
         app.config["TESTING"] = True
+        app.config["SESSION_COOKIE_SECURE"] = False
         with app.test_client() as c:
             yield c
+    # Clear rate limit state after each test to prevent pollution.
+    apimod._rate_hits.clear()
+    apimod._rate_hits_per_login.clear()
 
 
 def test_health(client):
@@ -54,47 +61,77 @@ def test_enrolled_user_with_built_widget_returns_ready(client):
 
 
 def test_settings_patch_enqueues_rebuild(client):
-    token = dbmod.enroll("alice", {"theme": "dark"})["edit_token"]
+    dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "alice"
     r = client.patch(
         "/api/alice/settings",
         json={"theme": "light"},
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Origin": "https://gh-stats.com"},
     )
     assert r.status_code == 200
     assert dbmod.get_settings("alice")["settings"]["theme"] == "light"
 
 
-def test_settings_patch_without_token_is_unauthorized(client):
+def test_settings_patch_without_origin_is_unauthorized(client):
     dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "alice"
     r = client.patch("/api/alice/settings", json={"theme": "light"})
-    assert r.status_code == 401
-    # Settings must not be mutated when the token check fails.
+    assert r.status_code == 403
+    # Settings must not be mutated when the origin check fails.
     assert dbmod.get_settings("alice")["settings"]["theme"] == "dark"
 
 
-def test_settings_patch_with_wrong_token_is_unauthorized(client):
+def test_patch_settings_without_session_is_401(client):
     dbmod.enroll("alice", {"theme": "dark"})
-    r = client.patch(
-        "/api/alice/settings",
-        json={"theme": "light"},
-        headers={"Authorization": "Bearer not-the-real-token"},
-    )
+    r = client.patch("/api/alice/settings", json={"theme": "light"},
+                     headers={"Origin": "https://gh-stats.com"})
     assert r.status_code == 401
 
 
+def test_patch_settings_wrong_login_is_403(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "bob"
+    r = client.patch("/api/alice/settings", json={"theme": "light"},
+                     headers={"Origin": "https://gh-stats.com"})
+    assert r.status_code == 403
+
+
+def test_patch_settings_matching_login_succeeds(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "alice"
+    r = client.patch("/api/alice/settings", json={"theme": "light"},
+                     headers={"Origin": "https://gh-stats.com"})
+    assert r.status_code == 200
+
+
+def test_patch_settings_bad_origin_is_403(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "alice"
+    r = client.patch("/api/alice/settings", json={"theme": "light"},
+                     headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403
+
+
 def test_refresh_is_one_shot(client):
-    token = dbmod.enroll("alice", {"theme": "dark"})["edit_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "alice"
     with patch("src.api.fetcher_client.force_fetch", return_value={"changed": True, "payload_hash": "x", "stored": True}):
-        r1 = client.post("/api/alice/refresh", headers=headers)
+        r1 = client.post("/api/alice/refresh", headers={"Origin": "https://gh-stats.com"})
         assert r1.status_code == 200
-        r2 = client.post("/api/alice/refresh", headers=headers)
+        r2 = client.post("/api/alice/refresh", headers={"Origin": "https://gh-stats.com"})
         assert r2.status_code == 409
 
 
 def test_refresh_without_token_is_unauthorized(client):
+    """Old test name; now tests without session but with proper Origin."""
     dbmod.enroll("alice", {"theme": "dark"})
-    r = client.post("/api/alice/refresh")
+    r = client.post("/api/alice/refresh", headers={"Origin": "https://gh-stats.com"})
     assert r.status_code == 401
 
 
@@ -110,6 +147,8 @@ def test_generate_endpoint_renders_and_stores_svg(client):
     """POST /api/<u>/generate invokes the on-demand render path and caches
     the composite SVG for subsequent README embeds."""
     dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "alice"
     with patch("src.worker.render_widgets_now",
                return_value={"composite": "<svg>r</svg>", "grade": "<svg>g</svg>"}):
         # Simulate the render path also updating current_widget so the
@@ -119,7 +158,7 @@ def test_generate_endpoint_renders_and_stores_svg(client):
             dbmod.point_current_widget(username, "h1")
             return {"composite": "<svg>r</svg>"}
         with patch("src.worker.render_widgets_now", side_effect=fake_render):
-            r = client.post("/api/alice/generate")
+            r = client.post("/api/alice/generate", headers={"Origin": "https://gh-stats.com"})
     assert r.status_code == 200
     body = r.get_json()
     assert body["status"] == "ready"
@@ -130,23 +169,15 @@ def test_generate_endpoint_renders_and_stores_svg(client):
 
 
 def test_generate_endpoint_rejects_unenrolled(client):
-    r = client.post("/api/bob/generate")
+    """With OAuth, unenrolled means having a session but no profile."""
+    with client.session_transaction() as s:
+        s["gh_login"] = "bob"
+    r = client.post("/api/bob/generate", headers={"Origin": "https://gh-stats.com"})
     assert r.status_code == 404
 
 
 # ---- GET /api/<username>/data: precomputed widget data for client-side rendering ----
 # Pure DB lookup — fetcher is never touched on the hot path.
-
-
-def test_data_endpoint_unknown_user_enrolls_and_returns_building(client):
-    r = client.get("/api/alice/data")
-    assert r.status_code == 202
-    body = r.get_json()
-    assert body["status"] == "building"
-    # Auto-enroll path surfaces the edit token so the browser can mutate
-    # the freshly-created profile without a separate claim flow.
-    assert "edit_token" in body and body["edit_token"]
-    assert dbmod.get_settings("alice") is not None  # auto-enrolled
 
 
 def test_data_endpoint_enrolled_but_unbuilt_returns_building(client):
@@ -187,8 +218,51 @@ def test_data_endpoint_returns_not_found_for_unknown_github_user(client):
     assert r.get_json()["status"] == "not_found"
 
 
-def test_data_endpoint_rate_limited_before_enroll(client, monkeypatch):
-    monkeypatch.setattr(apimod.config, "ENROLLMENT_DAILY_CAP", 0)
-    r = client.get("/api/newbie/data")
-    assert r.status_code == 429
-    assert r.get_json()["status"] == "rate_limited"
+def test_generate_without_session_is_401(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    r = client.post("/api/alice/generate", headers={"Origin": "https://gh-stats.com"})
+    assert r.status_code == 401
+
+
+def test_generate_wrong_login_is_403(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "bob"
+    r = client.post("/api/alice/generate", headers={"Origin": "https://gh-stats.com"})
+    assert r.status_code == 403
+
+
+def test_refresh_without_session_is_401(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    r = client.post("/api/alice/refresh", headers={"Origin": "https://gh-stats.com"})
+    assert r.status_code == 401
+
+
+def test_data_unknown_user_returns_404(client):
+    r = client.get("/api/testuser/data")
+    assert r.status_code == 404
+
+
+def test_enroll_endpoint_is_gone(client):
+    r = client.post("/api/enroll", json={"username": "alice"},
+                    headers={"Origin": "https://gh-stats.com"})
+    assert r.status_code == 405
+
+
+def test_per_login_mutate_rate_limit(client, monkeypatch):
+    """Per-login rate limit on mutate routes allows up to MAX requests,
+    then rejects with 429."""
+    monkeypatch.setattr(cfg, "RATE_LIMIT_MUTATE_PER_LOGIN_MAX", 2)
+    monkeypatch.setattr(cfg, "RATE_LIMIT_MUTATE_PER_LOGIN_WINDOW", 60)
+    dbmod.enroll("alice", {"theme": "dark"})
+    with client.session_transaction() as s:
+        s["gh_login"] = "alice"
+    h = {"Origin": "https://gh-stats.com"}
+    # First two requests should succeed.
+    r1 = client.patch("/api/alice/settings", json={}, headers=h)
+    assert r1.status_code == 200
+    r2 = client.patch("/api/alice/settings", json={}, headers=h)
+    assert r2.status_code == 200
+    # Third request should be rate-limited.
+    r3 = client.patch("/api/alice/settings", json={}, headers=h)
+    assert r3.status_code == 429

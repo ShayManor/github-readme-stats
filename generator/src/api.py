@@ -19,11 +19,12 @@ import os
 import time
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from functools import wraps
 from threading import BoundedSemaphore, Lock
-from flask import Flask, jsonify, request, Response, send_from_directory
+from flask import Flask, jsonify, request, Response, send_from_directory, session
 
-from . import config, db, fetcher_client, placeholder
+from . import auth, config, db, fetcher_client, placeholder
 from .themes import THEMES
 from .utils import is_valid_username, settings_size_ok
 import json as _json
@@ -79,11 +80,11 @@ _RATE_LIMITS = {
     # (endpoint_key): (max_hits, window_seconds). Defaults set in config.py
     # lean toward the mini PC — tighten further via env without redeploying.
     "mutate": (config.RATE_LIMIT_MUTATE_MAX, config.RATE_LIMIT_MUTATE_WINDOW),
-    "enroll": (config.RATE_LIMIT_ENROLL_MAX, config.RATE_LIMIT_ENROLL_WINDOW),
     "read":   (config.RATE_LIMIT_READ_MAX,   config.RATE_LIMIT_READ_WINDOW),
 }
 _rate_lock = Lock()
 _rate_hits: dict[tuple[str, str], deque] = defaultdict(deque)
+_rate_hits_per_login: dict[tuple[str, str], deque] = defaultdict(deque)
 
 
 def _client_ip() -> str:
@@ -111,46 +112,66 @@ def _rate_limit(bucket: str) -> bool:
     return True
 
 
+def _rate_limit_per_login(bucket: str, login: str) -> bool:
+    """Per-login rate limit layered on top of per-IP limit.
+
+    Returns True if allowed; False if the login has exceeded the limit.
+    If no login (unauthenticated), returns True (per-IP already covers it).
+    """
+    if not login:
+        return True  # per-IP already covers the unauth path
+    if bucket == "mutate":
+        limit, window = config.RATE_LIMIT_MUTATE_PER_LOGIN_MAX, config.RATE_LIMIT_MUTATE_PER_LOGIN_WINDOW
+    else:
+        return True
+    now = time.time()
+    cutoff = now - window
+    key = (bucket, login)
+    with _rate_lock:
+        q = _rate_hits_per_login[key]
+        while q and q[0] < cutoff:
+            q.popleft()
+        if len(q) >= limit:
+            return False
+        q.append(now)
+    return True
+
+
 def rate_limited(bucket: str):
     def deco(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             if not _rate_limit(bucket):
                 return jsonify({"error": "rate_limited"}), 429
+            if not _rate_limit_per_login(bucket, auth.current_login() or ""):
+                return jsonify({"error": "rate_limited"}), 429
             return fn(*args, **kwargs)
         return wrapper
     return deco
 
 
-def _extract_bearer() -> str:
-    """Read the caller-presented edit token. Accepts either
-    `Authorization: Bearer <t>` or `X-Edit-Token: <t>`."""
-    hdr = request.headers.get("Authorization", "")
-    if hdr.startswith("Bearer "):
-        return hdr[len("Bearer "):].strip()
-    return request.headers.get("X-Edit-Token", "").strip()
-
-
-def require_edit_token(fn):
-    """Enforce per-user bearer token on mutating endpoints.
-
-    The token is issued once at enrollment (see db.enroll) and hashed at rest.
-    Without it, anyone could overwrite any registrant's settings — these
-    endpoints used to live behind a no-op decorator."""
-    @wraps(fn)
-    def wrapper(username: str, *args, **kwargs):
-        if not is_valid_username(username):
-            return jsonify({"error": "invalid_username"}), 400
-        presented = _extract_bearer()
-        if not presented or not db.verify_edit_token(username, presented):
-            return jsonify({"error": "unauthorized"}), 401
-        return fn(username, *args, **kwargs)
-    return wrapper
 
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 app = Flask(__name__, static_folder=None)
+
+if config.SECRET_KEY:
+    app.secret_key = config.SECRET_KEY
+else:
+    # In tests and local dev we allow a weak default; production must set the env.
+    app.secret_key = "dev-insecure-secret-do-not-use-in-prod"
+
+app.config.update(
+    SESSION_COOKIE_NAME="gh_session",
+    SESSION_COOKIE_SECURE=config.SESSION_COOKIE_SECURE,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+)
+
+auth.init_oauth(app)
+
 # Reject oversized bodies before they reach the DB. 128 KB is generous for our
 # settings shape and still caps the memory footprint of a flood of PATCHes.
 app.config["MAX_CONTENT_LENGTH"] = 128 * 1024
@@ -293,12 +314,6 @@ def sanitize_settings(body: dict) -> dict:
     return out
 
 
-def require_auth(fn):
-    """Deprecated passthrough retained for back-compat. New code should use
-    require_edit_token above, which actually authenticates."""
-    return fn
-
-
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def spa(path: str):
@@ -314,6 +329,105 @@ def spa(path: str):
     if os.path.isfile(index):
         return send_from_directory(_STATIC_DIR, "index.html")
     return jsonify({"error": "frontend not built"}), 503
+
+
+@app.route("/api/auth/me", methods=["GET"])
+def auth_me():
+    login = auth.current_login()
+    if login is None:
+        return jsonify({"login": None})
+    return jsonify({
+        "login": login,
+        "avatar_url": session.get("gh_avatar_url"),
+    })
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+@auth.require_same_origin
+def auth_logout():
+    session.clear()
+    return ("", 204)
+
+
+@app.route("/api/auth/github/login", methods=["GET"])
+def auth_github_login():
+    import secrets as _secrets
+    nxt = request.args.get("next", "/")
+    # Only accept local relative paths to prevent open-redirect.
+    if not isinstance(nxt, str) or not nxt.startswith("/"):
+        nxt = "/"
+    state = _secrets.token_urlsafe(32)
+    session["oauth_state"] = state
+    session["oauth_next"] = nxt
+    redirect_uri = config.GITHUB_OAUTH_REDIRECT_URI or _derived_redirect_uri()
+    return auth.github_client().authorize_redirect(redirect_uri, state=state)
+
+
+def _derived_redirect_uri() -> str:
+    # Works behind cloudflared: the X-Forwarded-Proto/Host headers are set.
+    proto = request.headers.get("X-Forwarded-Proto") or request.scheme
+    host = request.headers.get("X-Forwarded-Host") or request.host
+    return f"{proto}://{host}/api/auth/github/callback"
+
+
+def _gh_api_get(token: str, path: str) -> dict:
+    """Thin wrapper over requests.get so tests can monkeypatch one function."""
+    import requests
+    r = requests.get(
+        f"https://api.github.com/{path.lstrip('/')}",
+        headers={"Authorization": f"Bearer {token}",
+                 "Accept": "application/vnd.github+json"},
+        timeout=config.API_TIMEOUT,
+    )
+    if r.status_code >= 400:
+        raise RuntimeError(f"github {path} {r.status_code}")
+    return r.json()
+
+
+@app.route("/api/auth/github/callback", methods=["GET"])
+def auth_github_callback():
+    from flask import redirect
+    state = request.args.get("state", "")
+    expected = session.pop("oauth_state", None)
+    nxt = session.pop("oauth_next", "/") or "/"
+    if not expected or state != expected:
+        return jsonify({"error": "bad_state"}), 400
+    try:
+        token_resp = auth.github_client().authorize_access_token()
+    except Exception:
+        log.exception("token exchange failed")
+        return redirect("/?auth_error=exchange")
+    access_token = token_resp.get("access_token") if token_resp else None
+    if not access_token:
+        return redirect("/?auth_error=exchange")
+    try:
+        user = _gh_api_get(access_token, "user")
+    except Exception:
+        log.exception("github /user failed")
+        return redirect("/?auth_error=profile")
+
+    login_raw = user.get("login")
+    gh_id = user.get("id")
+    avatar_url = user.get("avatar_url") or ""
+    if not isinstance(login_raw, str) or not is_valid_username(login_raw) or not isinstance(gh_id, int):
+        return redirect("/?auth_error=profile")
+
+    login = login_raw.lower()
+    session.permanent = True
+    session["gh_login"] = login
+    session["gh_id"] = gh_id
+    session["gh_avatar_url"] = avatar_url
+
+    # Implicit enrollment. Idempotent; refreshes github_avatar_url on return logins.
+    defaults = {
+        "theme": "dark",
+        "enabled": config.ENABLED_WIDGETS,
+        "widget_order": config.WIDGET_ORDER,
+    }
+    db.enroll(login, defaults, github_id=gh_id, github_avatar_url=avatar_url)
+    _kickoff_prefetch_async(login)
+
+    return redirect(nxt)
 
 
 @app.route("/api/health", methods=["GET"])
@@ -345,37 +459,13 @@ def get_user_data(username: str):
     """Precomputed widget data for client-side SVG rendering.
 
     Pure DB lookup — never touches the fetcher or runs compute on the hot
-    path. On miss: auto-enroll (queues an async build) and return
-    `{status: "building"}` with HTTP 202 so the client can show demo data
-    and poll until ready.
+    path. Enrollment is now OAuth-driven only.
     """
     if not is_valid_username(username):
         return jsonify({"error": "invalid_username"}), 400
     settings_row = db.get_settings(username)
     if settings_row is None:
-        if not _rate_limit("enroll"):
-            return jsonify({"status": "rate_limited"}), 429
-        if db.enrollments_today() >= config.ENROLLMENT_DAILY_CAP:
-            return jsonify({"status": "rate_limited"}), 429
-        # Queue-depth backpressure: if the worker is already behind, stop
-        # accepting new enrollments until it catches up. Prevents a burst
-        # of auto-enrolls from filling the jobs table faster than a mini
-        # PC can drain it.
-        if db.pending_job_count() >= config.PENDING_JOB_QUEUE_CAP:
-            return jsonify({"status": "rate_limited"}), 429
-        defaults = {
-            "theme": "dark",
-            "enabled": config.ENABLED_WIDGETS,
-            "widget_order": config.WIDGET_ORDER,
-        }
-        result = db.enroll(username, defaults)
-        _kickoff_prefetch_async(username)
-        # Token is surfaced on this auto-enroll path so the browser UI can
-        # edit the freshly-created profile without a separate claim step.
-        resp = {"status": "building"}
-        if result.get("edit_token"):
-            resp["edit_token"] = result["edit_token"]
-        return jsonify(resp), 202
+        return jsonify({"status": "not_found"}), 404
 
     db.touch_last_requested(username)
 
@@ -393,9 +483,8 @@ def _serve(username: str, widget_name: str) -> Response:
     """Serves a cached SVG for README embeds.
 
     SVGs are only produced by POST /api/<u>/generate. Before that the
-    endpoint returns a "building" placeholder; enrollment is frontend-
-    driven (via /api/<u>/data or /api/enroll) so this path never auto-
-    enrolls on its own.
+    endpoint returns a "building" placeholder; enrollment is now OAuth-driven
+    so this path never auto-enrolls on its own.
     """
     settings_row = db.get_settings(username)
     if settings_row is None:
@@ -434,31 +523,8 @@ def _placeholder_response(variant: str, username: str, theme: str = "dark") -> R
                              "X-Content-Type-Options": "nosniff"})
 
 
-@app.route("/api/enroll", methods=["POST"])
-@rate_limited("enroll")
-def enroll_endpoint():
-    body = request.get_json(silent=True) or {}
-    username = body.get("username")
-    if not is_valid_username(username):
-        return jsonify({"error": "invalid_username"}), 400
-    if db.get_settings(username) is not None:
-        return jsonify({"error": "already_enrolled"}), 409
-    if db.enrollments_today() >= config.ENROLLMENT_DAILY_CAP:
-        return jsonify({"error": "rate_limited"}), 429
-    if db.pending_job_count() >= config.PENDING_JOB_QUEUE_CAP:
-        return jsonify({"error": "rate_limited"}), 429
-    defaults = {"theme": "dark", "enabled": config.ENABLED_WIDGETS, "widget_order": config.WIDGET_ORDER}
-    result = db.enroll(username, defaults)
-    _kickoff_prefetch_async(username)
-    body = {"enrolled": True, "job_id": result["job_id"]}
-    if result.get("edit_token"):
-        body["edit_token"] = result["edit_token"]
-    return jsonify(body)
-
-
 @app.route("/api/<username>/settings", methods=["GET"])
 @rate_limited("read")
-@require_edit_token
 def get_settings(username: str):
     s = db.get_settings(username)
     if s is None:
@@ -474,7 +540,8 @@ def get_settings(username: str):
 
 @app.route("/api/<username>/settings", methods=["PATCH"])
 @rate_limited("mutate")
-@require_edit_token
+@auth.require_same_origin
+@auth.require_github_owner
 def patch_settings(username: str):
     current = db.get_settings(username)
     if current is None:
@@ -492,12 +559,13 @@ def patch_settings(username: str):
 
 @app.route("/api/<username>/generate", methods=["POST"])
 @rate_limited("mutate")
+@auth.require_same_origin
+@auth.require_github_owner
 def generate(username: str):
     """Render the composite SVG from the cached fetcher payload + current
     settings, persist it to widgets.db, and return status. Called by the
     Generate button; safe to call repeatedly (each call re-renders with
-    the latest settings). Unauth'd — anyone can trigger a render of a
-    previously-enrolled user's public widget.
+    the latest settings). Requires OAuth session with matching login.
 
     Capacity:
       * Per-IP rate limit (mutate bucket) caps how fast any one caller can
@@ -541,7 +609,8 @@ def generate(username: str):
 
 @app.route("/api/<username>/refresh", methods=["POST"])
 @rate_limited("mutate")
-@require_edit_token
+@auth.require_same_origin
+@auth.require_github_owner
 def refresh(username: str):
     s = db.get_settings(username)
     if s is None:

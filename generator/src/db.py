@@ -4,10 +4,8 @@ All access goes through this module so a future Postgres swap is local to here.
 Both DBs are opened with WAL mode.
 """
 import hashlib
-import hmac as _hmac
 import json
 import os
-import secrets
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -27,7 +25,9 @@ CREATE TABLE IF NOT EXISTS users (
     last_fetcher_payload_hash TEXT,
     manual_refresh_used       INTEGER DEFAULT 0,
     last_requested_at         TEXT NOT NULL,
-    edit_token_hash           TEXT
+    edit_token_hash           TEXT,
+    github_id                 INTEGER,
+    github_avatar_url         TEXT
 );
 CREATE TABLE IF NOT EXISTS enrollments_daily (
     day   TEXT PRIMARY KEY,
@@ -116,27 +116,14 @@ def init_dbs() -> None:
         cols = {r["name"] for r in c.execute("PRAGMA table_info(users)").fetchall()}
         if "edit_token_hash" not in cols:
             c.execute("ALTER TABLE users ADD COLUMN edit_token_hash TEXT")
+        if "github_id" not in cols:
+            c.execute("ALTER TABLE users ADD COLUMN github_id INTEGER")
+        if "github_avatar_url" not in cols:
+            c.execute("ALTER TABLE users ADD COLUMN github_avatar_url TEXT")
         c.commit()
     with _widgets_conn() as c:
         c.executescript(_WIDGETS_SCHEMA)
         c.commit()
-
-
-def _hash_edit_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
-def verify_edit_token(username: str, presented: str) -> bool:
-    """Constant-time check of the caller's edit token against the stored hash."""
-    if not username or not presented:
-        return False
-    with _settings_conn() as c:
-        row = c.execute(
-            "SELECT edit_token_hash FROM users WHERE username=?", (username,)
-        ).fetchone()
-    if row is None or not row["edit_token_hash"]:
-        return False
-    return _hmac.compare_digest(row["edit_token_hash"], _hash_edit_token(presented))
 
 
 def settings_hash(settings: dict) -> str:
@@ -146,44 +133,46 @@ def settings_hash(settings: dict) -> str:
 
 # ---- settings / enrollment ----
 
-def enroll(username: str, defaults: dict) -> dict:
-    """Insert a settings row + increment daily counter + enqueue build.
+def enroll(username: str, defaults: dict,
+           github_id: int | None = None,
+           github_avatar_url: str | None = None) -> dict:
+    """Insert a settings row if missing, bump the daily counter, enqueue a build.
 
-    Returns {"job_id", "edit_token"}. The edit_token is the bearer token the
-    caller must present on future settings mutations for this user. We only
-    store its SHA-256 hash, so the plaintext here is the one and only chance
-    to surface it to the client. Subsequent enroll() calls for an existing
-    user return `edit_token=None` to avoid leaking tokens issued to earlier
-    registrants — settings cannot be taken over by re-enrolling.
+    Idempotent: calling again for an existing user refreshes github_avatar_url
+    (so login keeps the avatar fresh) and enqueues a rebuild. Always returns
+    {"job_id": int}. No token is returned — auth is handled by the signed
+    session cookie.
     """
     sh = settings_hash(defaults)
     now = _now()
-    token = secrets.token_urlsafe(32)
-    token_hash = _hash_edit_token(token)
     with _settings_conn() as c:
         cur_ins = c.execute(
             """INSERT INTO users(username, settings_json, settings_hash, enrolled_at,
-                                 last_requested_at, edit_token_hash)
-               VALUES (?, ?, ?, ?, ?, ?)
+                                 last_requested_at, github_id, github_avatar_url)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(username) DO NOTHING""",
-            (username, json.dumps(defaults), sh, now, now, token_hash),
+            (username, json.dumps(defaults), sh, now, now, github_id, github_avatar_url),
         )
         inserted = cur_ins.rowcount == 1
-        c.execute(
-            """INSERT INTO enrollments_daily(day, count) VALUES (?, 1)
-               ON CONFLICT(day) DO UPDATE SET count = count + 1""",
-            (_today(),),
-        )
+        if not inserted and (github_id is not None or github_avatar_url is not None):
+            c.execute(
+                "UPDATE users SET github_id=COALESCE(?, github_id), "
+                "github_avatar_url=COALESCE(?, github_avatar_url) WHERE username=?",
+                (github_id, github_avatar_url, username),
+            )
+        if inserted:
+            c.execute(
+                """INSERT INTO enrollments_daily(day, count) VALUES (?, 1)
+                   ON CONFLICT(day) DO UPDATE SET count = count + 1""",
+                (_today(),),
+            )
         cur = c.execute(
             """INSERT INTO jobs(kind, username, status, created_at, updated_at)
                VALUES ('build', ?, 'pending', ?, ?)""",
             (username, now, now),
         )
         c.commit()
-        return {
-            "job_id": cur.lastrowid,
-            "edit_token": token if inserted else None,
-        }
+        return {"job_id": cur.lastrowid}
 
 
 def enrollments_today() -> int:
@@ -261,6 +250,15 @@ def list_enrolled() -> list[str]:
 def set_last_fetcher_hash(username: str, h: str) -> None:
     with _settings_conn() as c:
         c.execute("UPDATE users SET last_fetcher_payload_hash=? WHERE username=?", (h, username))
+        c.commit()
+
+
+def set_github_profile(username: str, github_id: int, github_avatar_url: str) -> None:
+    with _settings_conn() as c:
+        c.execute(
+            "UPDATE users SET github_id=?, github_avatar_url=? WHERE username=?",
+            (github_id, github_avatar_url, username),
+        )
         c.commit()
 
 

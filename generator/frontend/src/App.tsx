@@ -3,9 +3,10 @@ import './index.css'
 import { SearchScreen } from './screens/SearchScreen'
 import { WorkshopScreen } from './screens/WorkshopScreen'
 import { ResultScreen } from './screens/ResultScreen'
+import { AuthButton } from './components/AuthButton'
 import type { WidgetData } from './lib/renderWidgets'
 import { DEMO_WIDGET_DATA } from './lib/demoData'
-import { authHeaders, saveEditToken } from './lib/editToken'
+import { fetchMe, type Me } from './lib/auth'
 
 export type Achievement = {
   title: string
@@ -49,6 +50,7 @@ const POLL_INTERVAL_MS = 2000
 const POLL_TIMEOUT_MS = 120_000
 
 export default function App() {
+  const [me, setMe] = useState<Me>({ login: null })
   const [step, setStep] = useState<Step>('search')
   const [username, setUsername] = useState('')
   const [settings, setSettings] = useState<WidgetSettings>({ ...DEFAULT_SETTINGS })
@@ -72,6 +74,7 @@ export default function App() {
   }, [])
 
   useEffect(() => stopPolling, [stopPolling])
+  useEffect(() => { fetchMe().then(setMe) }, [])
 
   const startFetch = useCallback((user: string) => {
     stopPolling()
@@ -88,12 +91,8 @@ export default function App() {
         const r = await fetch(`/api/${encodeURIComponent(user)}/data`)
         if (aborted.current) return
         const body = await r.json().catch(
-          () => ({} as { status?: string; data?: WidgetData; edit_token?: string })
+          () => ({} as { status?: string; data?: WidgetData })
         )
-        // The 202 auto-enroll response surfaces an edit_token exactly once
-        // per fresh username. Persist it so PATCH /settings and POST
-        // /refresh can authenticate this browser as the profile owner.
-        if (body.edit_token) saveEditToken(user, body.edit_token)
         const status = body.status
 
         if (r.status === 200 && status === 'ready' && body.data) {
@@ -156,10 +155,8 @@ export default function App() {
       }
       const patchRes = await fetch(`/api/${encodeURIComponent(username)}/settings`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders(username),
-        },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(backendSettings),
       })
       if (!patchRes.ok && patchRes.status !== 404) {
@@ -167,7 +164,10 @@ export default function App() {
         return
       }
 
-      const r = await fetch(`/api/${encodeURIComponent(username)}/generate`, { method: 'POST' })
+      const r = await fetch(`/api/${encodeURIComponent(username)}/generate`, {
+        method: 'POST',
+        credentials: 'include',
+      })
       if (r.status === 404) {
         const body = await r.json().catch(() => ({} as { status?: string }))
         setGenerateError(body.status === 'not_found' ? 'User not found' : 'Not enrolled')
@@ -204,6 +204,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <div className="header-bar">
+        <AuthButton me={me} onChange={setMe} />
+      </div>
       {step === 'search' && (
         <SearchScreen onSearch={handleSearch} />
       )}
@@ -217,6 +220,8 @@ export default function App() {
           fetchDone={fetchDone}
           fetchError={fetchError}
           widgetData={widgetData}
+          me={me}
+          onAuthChange={setMe}
         />
       )}
       {step === 'result' && (

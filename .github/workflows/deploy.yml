@@ -80,4 +80,8 @@ jobs:
           IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
           GITHUB_PAT: ${{ secrets.FETCHER_GITHUB_PAT }}
           FETCHER_INTERNAL_TOKEN: ${{ secrets.FETCHER_INTERNAL_TOKEN }}
+          GH_OAUTH_CLIENT_ID: ${{ secrets.GH_OAUTH_CLIENT_ID }}
+          GH_OAUTH_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
+          GENERATOR_SECRET_KEY: ${{ secrets.GENERATOR_SECRET_KEY }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
         run: ./deploy/deploy.sh

@@ -19,9 +19,10 @@ def env(monkeypatch):
 @responses.activate
 def test_full_flow_data_then_generate_then_serve(env):
     """End-to-end of the new two-phase pipeline:
-      1. /data enrolls + kicks off prefetch (worker populates widget_data)
-      2. /generate renders SVG from the cached payload + settings
-      3. /api/<u> serves the stored SVG to README consumers
+      1. OAuth callback enrolls user + kicks off prefetch (worker populates widget_data)
+      2. /data endpoint returns widget data
+      3. /generate renders SVG from the cached payload + settings
+      4. /api/<u> serves the stored SVG to README consumers
     """
     responses.add(
         responses.GET, "http://fetcher-mock/data/alice",
@@ -32,7 +33,10 @@ def test_full_flow_data_then_generate_then_serve(env):
     )
     client = apimod.app.test_client()
 
-    # Phase 1: prefetch via /data (enrolls + kicks off background thread).
+    # Phase 1: OAuth callback enrolls user (simulated via db.enroll).
+    dbmod.enroll("alice", {"theme": "dark"})
+
+    # Widget data should be building right after enrollment.
     r_data = client.get("/api/alice/data")
     assert r_data.status_code == 202
 
@@ -51,8 +55,10 @@ def test_full_flow_data_then_generate_then_serve(env):
         time.sleep(0.05)
     assert r.status_code == 200 and r.get_json()["status"] == "ready"
 
-    # Phase 2: Generate button → render SVG.
-    r_gen = client.post("/api/alice/generate")
+    # Phase 2: Generate button → render SVG (with session).
+    with client.session_transaction() as s:
+        s["gh_login"] = "alice"
+    r_gen = client.post("/api/alice/generate", headers={"Origin": "https://gh-stats.com"})
     assert r_gen.status_code == 200
     assert r_gen.get_json()["status"] == "ready"
 

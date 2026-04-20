@@ -2,6 +2,8 @@ import { useState, useMemo, type ReactNode } from 'react'
 import DOMPurify from 'dompurify'
 import type { WidgetSettings, Achievement, PerWidgetSettings } from '../App'
 import { renderAllWidgets, type WidgetData } from '../lib/renderWidgets'
+import { signInUrl } from '../lib/auth'
+import type { Me } from '../lib/auth'
 
 // Defense-in-depth: the client-rendered preview assembles SVG from
 // GitHub-sourced strings (collaborator logins, repo names) and user-typed
@@ -214,6 +216,8 @@ type Props = {
   fetchDone: boolean
   fetchError: string | null
   widgetData: WidgetData | null
+  me: Me
+  onAuthChange?: (m: Me) => void
 }
 
 export function WorkshopScreen({
@@ -225,7 +229,9 @@ export function WorkshopScreen({
   fetchDone,
   fetchError,
   widgetData,
+  me,
 }: Props) {
+  const canEdit = !!me.login && me.login.toLowerCase() === username.toLowerCase()
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null)
 
   const updateSetting = <K extends keyof WidgetSettings>(key: K, val: WidgetSettings[K]) => {
@@ -312,233 +318,246 @@ export function WorkshopScreen({
             </div>
           )}
 
-          {/* Theme */}
-          <div className="mb-5">
-            <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Theme</div>
-            <div className="flex gap-2 flex-wrap">
-              {THEMES.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => updateSetting('theme', t.id)}
-                  title={t.label}
-                  className={`w-9 h-9 rounded-lg transition-all ${
-                    settings.theme === t.id
-                      ? 'ring-2 ring-blue-500 ring-offset-2'
-                      : t.border
-                        ? 'border border-gray-200 hover:border-gray-300'
-                        : 'hover:ring-1 hover:ring-gray-300 hover:ring-offset-1'
-                  }`}
-                  style={{ backgroundColor: t.color }}
-                />
-              ))}
-            </div>
-            <div className="text-[10px] text-gray-400 mt-1.5">
-              {THEMES.find(t => t.id === settings.theme)?.label}
-            </div>
-          </div>
-
-          {/* Widgets with inline advanced settings */}
-          <div className="mb-5">
-            <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Widgets</div>
-            <div className="flex flex-col gap-0.5">
-              {ALL_WIDGETS.map(w => {
-                const enabled = settings.widgets.includes(w.id)
-                const hasAdvanced = ['grade', 'impact', 'collaborators', 'focus', 'languages', 'achievements'].includes(w.id)
-                const isExpanded = expandedWidget === w.id && enabled
-
-                return (
-                  <div key={w.id}>
-                    <div className="flex items-center">
-                      <button
-                        onClick={() => toggleWidget(w.id)}
-                        className={`flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors text-left ${
-                          enabled
-                            ? 'text-gray-800 bg-gray-50'
-                            : 'text-gray-400 hover:text-gray-500 hover:bg-gray-50/50'
-                        }`}
-                      >
-                        <div className={`w-3.5 h-3.5 rounded flex-shrink-0 transition-colors ${enabled ? 'bg-blue-500' : 'bg-gray-200'}`} />
-                        {w.label}
-                      </button>
-                      {hasAdvanced && enabled && (
-                        <button
-                          onClick={() => toggleAdvanced(w.id)}
-                          className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
-                          title="Advanced settings"
-                        >
-                          <ChevronIcon open={isExpanded} />
-                        </button>
-                      )}
-                    </div>
-
-                    {isExpanded && (
-                      <div className="ml-6 mt-1 mb-2 p-2.5 rounded-lg bg-gray-50/80 border border-gray-100 flex flex-col gap-2.5">
-                        {w.id === 'grade' && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-gray-500">Max tags</span>
-                            <NumberStepper
-                              value={getWidgetSetting('grade', 'max_tags', 6)}
-                              min={1} max={20}
-                              onChange={v => updateWidgetSetting('grade', 'max_tags', v)}
-                            />
-                          </div>
-                        )}
-
-                        {w.id === 'impact' && (
-                          <div>
-                            <span className="text-[10px] text-gray-500 block mb-1.5">Line color</span>
-                            <ColorPicker
-                              value={getWidgetSetting('impact', 'line_color', '#58a6ff')}
-                              onChange={v => updateWidgetSetting('impact', 'line_color', v)}
-                            />
-                          </div>
-                        )}
-
-                        {w.id === 'collaborators' && (
-                          <div className="flex flex-col gap-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] text-gray-500">Max shown</span>
-                              <NumberStepper
-                                value={getWidgetSetting('collaborators', 'max_count', 5)}
-                                min={1} max={10}
-                                onChange={v => updateWidgetSetting('collaborators', 'max_count', v)}
-                              />
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-gray-500 block mb-1.5">Bar color</span>
-                              <ColorPicker
-                                value={getWidgetSetting('collaborators', 'bar_color', '#a78bfa')}
-                                onChange={v => updateWidgetSetting('collaborators', 'bar_color', v)}
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {w.id === 'focus' && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-gray-500">Max categories</span>
-                            <NumberStepper
-                              value={getWidgetSetting('focus', 'max_categories', 6)}
-                              min={1} max={10}
-                              onChange={v => updateWidgetSetting('focus', 'max_categories', v)}
-                            />
-                          </div>
-                        )}
-
-                        {w.id === 'languages' && (
-                          <div className="flex flex-col gap-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] text-gray-500">Max languages</span>
-                              <NumberStepper
-                                value={getWidgetSetting('languages', 'max_languages', 5)}
-                                min={1} max={10}
-                                onChange={v => updateWidgetSetting('languages', 'max_languages', v)}
-                              />
-                            </div>
-                            <HiddenLanguagesPicker
-                              detected={widgetData?.languages ?? []}
-                              hidden={settings.hiddenLanguages}
-                              onChange={next => updateSetting('hiddenLanguages', next)}
-                            />
-                          </div>
-                        )}
-
-                        {w.id === 'achievements' && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-gray-500">Max shown</span>
-                            <NumberStepper
-                              value={getWidgetSetting('achievements', 'max_items', 5)}
-                              min={1} max={10}
-                              onChange={v => updateWidgetSetting('achievements', 'max_items', v)}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Achievements editor */}
-          {settings.widgets.includes('achievements') && (
-            <div className="mb-5">
-              <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Achievements</div>
-              <div className="flex flex-col gap-2">
-                {settings.achievements.map((ach, idx) => (
-                  <div key={idx} className="p-2.5 rounded-lg border border-gray-100 bg-gray-50/50">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      {ICONS.map(ic => {
-                        const selected = ach.icon === ic.id
-                        return (
-                          <button
-                            key={ic.id}
-                            onClick={() => updateAchievement(idx, 'icon', ic.id)}
-                            className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
-                              selected
-                                ? 'bg-gray-800 text-white border border-gray-800'
-                                : 'bg-white text-gray-500 border border-gray-200 hover:text-gray-800 hover:border-gray-300'
-                            }`}
-                            title={ic.id}
-                            aria-pressed={selected}
-                          >
-                            {ic.svg}
-                          </button>
-                        )
-                      })}
-                      <div className="flex-1" />
-                      <button
-                        onClick={() => removeAchievement(idx)}
-                        className="text-gray-300 hover:text-red-400 transition-colors text-xs px-1"
-                        title="Remove"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      value={ach.title}
-                      onChange={e => updateAchievement(idx, 'title', e.target.value)}
-                      placeholder="Title (e.g. Hackathon Winner)"
-                      className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300 mb-1.5"
-                    />
-                    <input
-                      type="text"
-                      value={ach.subtitle}
-                      onChange={e => updateAchievement(idx, 'subtitle', e.target.value)}
-                      placeholder="Subtitle (e.g. 1st Place · AI Track)"
-                      className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300 mb-1.5"
-                    />
-                    <input
-                      type="text"
-                      value={ach.event_date}
-                      onChange={e => updateAchievement(idx, 'event_date', e.target.value)}
-                      placeholder="Date (e.g. 2025-01)"
-                      className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300"
-                    />
-                  </div>
-                ))}
-                <button
-                  onClick={addAchievement}
-                  className="w-full py-2 rounded-lg border border-dashed border-gray-200 text-xs text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-colors"
-                >
-                  + Add achievement
-                </button>
-              </div>
+          {!canEdit && (
+            <div className="banner">
+              {me.login
+                ? `Signed in as ${me.login}. You can only edit your own widget.`
+                : <a href={signInUrl()}>Sign in with GitHub to edit your widget</a>}
             </div>
           )}
 
-          {/* Spacer */}
-          <div className="flex-1 min-h-4" />
+          {/* Theme, Widgets, Achievements editor, Generate — owner-only */}
+          {canEdit && (
+            <>
+              {/* Theme */}
+              <div className="mb-5">
+                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Theme</div>
+                <div className="flex gap-2 flex-wrap">
+                  {THEMES.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => updateSetting('theme', t.id)}
+                      title={t.label}
+                      className={`w-9 h-9 rounded-lg transition-all ${
+                        settings.theme === t.id
+                          ? 'ring-2 ring-blue-500 ring-offset-2'
+                          : t.border
+                            ? 'border border-gray-200 hover:border-gray-300'
+                            : 'hover:ring-1 hover:ring-gray-300 hover:ring-offset-1'
+                      }`}
+                      style={{ backgroundColor: t.color }}
+                    />
+                  ))}
+                </div>
+                <div className="text-[10px] text-gray-400 mt-1.5">
+                  {THEMES.find(t => t.id === settings.theme)?.label}
+                </div>
+              </div>
 
-          {/* Generate button */}
-          <button
-            onClick={onGenerate}
-            className="w-full py-3 rounded-xl bg-gray-800 text-white text-sm font-medium hover:bg-gray-700 transition-colors"
-          >
-            Generate →
-          </button>
+              {/* Widgets with inline advanced settings */}
+              <div className="mb-5">
+                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Widgets</div>
+                <div className="flex flex-col gap-0.5">
+                  {ALL_WIDGETS.map(w => {
+                    const enabled = settings.widgets.includes(w.id)
+                    const hasAdvanced = ['grade', 'impact', 'collaborators', 'focus', 'languages', 'achievements'].includes(w.id)
+                    const isExpanded = expandedWidget === w.id && enabled
+
+                    return (
+                      <div key={w.id}>
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => toggleWidget(w.id)}
+                            className={`flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors text-left ${
+                              enabled
+                                ? 'text-gray-800 bg-gray-50'
+                                : 'text-gray-400 hover:text-gray-500 hover:bg-gray-50/50'
+                            }`}
+                          >
+                            <div className={`w-3.5 h-3.5 rounded flex-shrink-0 transition-colors ${enabled ? 'bg-blue-500' : 'bg-gray-200'}`} />
+                            {w.label}
+                          </button>
+                          {hasAdvanced && enabled && (
+                            <button
+                              onClick={() => toggleAdvanced(w.id)}
+                              className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                              title="Advanced settings"
+                            >
+                              <ChevronIcon open={isExpanded} />
+                            </button>
+                          )}
+                        </div>
+
+                        {isExpanded && (
+                          <div className="ml-6 mt-1 mb-2 p-2.5 rounded-lg bg-gray-50/80 border border-gray-100 flex flex-col gap-2.5">
+                            {w.id === 'grade' && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-gray-500">Max tags</span>
+                                <NumberStepper
+                                  value={getWidgetSetting('grade', 'max_tags', 6)}
+                                  min={1} max={20}
+                                  onChange={v => updateWidgetSetting('grade', 'max_tags', v)}
+                                />
+                              </div>
+                            )}
+
+                            {w.id === 'impact' && (
+                              <div>
+                                <span className="text-[10px] text-gray-500 block mb-1.5">Line color</span>
+                                <ColorPicker
+                                  value={getWidgetSetting('impact', 'line_color', '#58a6ff')}
+                                  onChange={v => updateWidgetSetting('impact', 'line_color', v)}
+                                />
+                              </div>
+                            )}
+
+                            {w.id === 'collaborators' && (
+                              <div className="flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] text-gray-500">Max shown</span>
+                                  <NumberStepper
+                                    value={getWidgetSetting('collaborators', 'max_count', 5)}
+                                    min={1} max={10}
+                                    onChange={v => updateWidgetSetting('collaborators', 'max_count', v)}
+                                  />
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-gray-500 block mb-1.5">Bar color</span>
+                                  <ColorPicker
+                                    value={getWidgetSetting('collaborators', 'bar_color', '#a78bfa')}
+                                    onChange={v => updateWidgetSetting('collaborators', 'bar_color', v)}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {w.id === 'focus' && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-gray-500">Max categories</span>
+                                <NumberStepper
+                                  value={getWidgetSetting('focus', 'max_categories', 6)}
+                                  min={1} max={10}
+                                  onChange={v => updateWidgetSetting('focus', 'max_categories', v)}
+                                />
+                              </div>
+                            )}
+
+                            {w.id === 'languages' && (
+                              <div className="flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] text-gray-500">Max languages</span>
+                                  <NumberStepper
+                                    value={getWidgetSetting('languages', 'max_languages', 5)}
+                                    min={1} max={10}
+                                    onChange={v => updateWidgetSetting('languages', 'max_languages', v)}
+                                  />
+                                </div>
+                                <HiddenLanguagesPicker
+                                  detected={widgetData?.languages ?? []}
+                                  hidden={settings.hiddenLanguages}
+                                  onChange={next => updateSetting('hiddenLanguages', next)}
+                                />
+                              </div>
+                            )}
+
+                            {w.id === 'achievements' && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-gray-500">Max shown</span>
+                                <NumberStepper
+                                  value={getWidgetSetting('achievements', 'max_items', 5)}
+                                  min={1} max={10}
+                                  onChange={v => updateWidgetSetting('achievements', 'max_items', v)}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Achievements editor */}
+              {settings.widgets.includes('achievements') && (
+                <div className="mb-5">
+                  <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Achievements</div>
+                  <div className="flex flex-col gap-2">
+                    {settings.achievements.map((ach, idx) => (
+                      <div key={idx} className="p-2.5 rounded-lg border border-gray-100 bg-gray-50/50">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          {ICONS.map(ic => {
+                            const selected = ach.icon === ic.id
+                            return (
+                              <button
+                                key={ic.id}
+                                onClick={() => updateAchievement(idx, 'icon', ic.id)}
+                                className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
+                                  selected
+                                    ? 'bg-gray-800 text-white border border-gray-800'
+                                    : 'bg-white text-gray-500 border border-gray-200 hover:text-gray-800 hover:border-gray-300'
+                                }`}
+                                title={ic.id}
+                                aria-pressed={selected}
+                              >
+                                {ic.svg}
+                              </button>
+                            )
+                          })}
+                          <div className="flex-1" />
+                          <button
+                            onClick={() => removeAchievement(idx)}
+                            className="text-gray-300 hover:text-red-400 transition-colors text-xs px-1"
+                            title="Remove"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={ach.title}
+                          onChange={e => updateAchievement(idx, 'title', e.target.value)}
+                          placeholder="Title (e.g. Hackathon Winner)"
+                          className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300 mb-1.5"
+                        />
+                        <input
+                          type="text"
+                          value={ach.subtitle}
+                          onChange={e => updateAchievement(idx, 'subtitle', e.target.value)}
+                          placeholder="Subtitle (e.g. 1st Place · AI Track)"
+                          className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300 mb-1.5"
+                        />
+                        <input
+                          type="text"
+                          value={ach.event_date}
+                          onChange={e => updateAchievement(idx, 'event_date', e.target.value)}
+                          placeholder="Date (e.g. 2025-01)"
+                          className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300"
+                        />
+                      </div>
+                    ))}
+                    <button
+                      onClick={addAchievement}
+                      className="w-full py-2 rounded-lg border border-dashed border-gray-200 text-xs text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-colors"
+                    >
+                      + Add achievement
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Spacer */}
+              <div className="flex-1 min-h-4" />
+
+              {/* Generate button */}
+              <button
+                onClick={onGenerate}
+                className="w-full py-3 rounded-xl bg-gray-800 text-white text-sm font-medium hover:bg-gray-700 transition-colors"
+              >
+                Generate →
+              </button>
+            </>
+          )}
         </div>
 
         {/* Right preview area */}
