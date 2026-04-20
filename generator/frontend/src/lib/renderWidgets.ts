@@ -31,7 +31,7 @@ export type WidgetData = {
 export type PerWidgetSettings = {
   grade?: { max_tags?: number }
   impact?: { line_color?: string }
-  streaks?: { show_dates?: boolean }
+  streaks?: { color?: string }
   collaborators?: { max_count?: number; bar_color?: string }
   focus?: { max_categories?: number }
   languages?: { max_languages?: number }
@@ -254,62 +254,77 @@ function renderLanguages(languages: LanguageData[], t: Theme, s?: { max_language
   return cardWrapper(inner, 380, rowsH + 36, t, 'Languages')
 }
 
-const STREAKS_FLAME_PATH = 'M12 2c1 4 5 5 5 10a5 5 0 1 1-10 0c0-2 1-3 2-4 0 1 1 2 2 2 -1-2 0-5 1-8z'
-
-function streaksFlame(color: string): string {
-  return `<path d="${STREAKS_FLAME_PATH}" fill="${color}" opacity="0.95"/>`
-}
-
-function streaksTrophy(color: string): string {
-  return (
-    `<path d="M6 3h12v3a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V3z" fill="none" stroke="${color}" stroke-width="1.6"/>` +
-    `<path d="M4 4h2v2a2 2 0 0 1-2 2H3V5a1 1 0 0 1 1-1zM20 4h-2v2a2 2 0 0 0 2 2h1V5a1 1 0 0 0-1-1z" fill="none" stroke="${color}" stroke-width="1.4"/>` +
-    `<rect x="9" y="11" width="6" height="3" fill="${color}"/>` +
-    `<rect x="7" y="14" width="10" height="2" rx="0.5" fill="${color}"/>`
-  )
-}
-
 const STREAK_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-function fmtStreakDate(iso?: string): string {
-  if (!iso) return ''
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
-  if (!m) return ''
-  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3])
-  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return ''
-  return `${STREAK_MONTHS[mo-1]} ${String(d).padStart(2, '0')}, ${y}`
-}
-function fmtStreakRange(start?: string, end?: string): string {
-  const s = fmtStreakDate(start), e = fmtStreakDate(end)
-  if (s && e) return `${s} – ${e}`
-  return s || e
+const STREAK_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/
+
+function streaksSafeColor(value: string | undefined, fallback: string): string {
+  if (typeof value !== 'string' || value.length > 32) return fallback
+  return STREAK_COLOR_RE.test(value) ? value : fallback
 }
 
-function renderStreaks(data: StreakData, t: Theme, s?: { show_dates?: boolean }): string {
-  const showDates = s?.show_dates !== false
+function streakParseDate(iso?: string): { y: number; m: number; d: number } | null {
+  if (!iso) return null
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!m) return null
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3])
+  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null
+  return { y, m: mo, d }
+}
+function streakFmtDay(dt: { y: number; m: number; d: number }, includeYear: boolean): string {
+  return includeYear ? `${STREAK_MONTHS[dt.m-1]} ${dt.d}, ${dt.y}` : `${STREAK_MONTHS[dt.m-1]} ${dt.d}`
+}
+function fmtStreakCurrent(startIso?: string, todayIso?: string): string {
+  const s = streakParseDate(startIso); if (!s) return ''
+  const t = streakParseDate(todayIso) ?? { y: new Date().getFullYear(), m: 1, d: 1 }
+  return `${streakFmtDay(s, s.y !== t.y)} – Today`
+}
+function fmtStreakLongest(startIso?: string, endIso?: string): string {
+  const s = streakParseDate(startIso), e = streakParseDate(endIso)
+  if (s && e) {
+    if (s.y === e.y) return `${streakFmtDay(s, false)} – ${streakFmtDay(e, true)}`
+    return `${streakFmtDay(s, true)} – ${streakFmtDay(e, true)}`
+  }
+  if (e) return streakFmtDay(e, true)
+  if (s) return streakFmtDay(s, true)
+  return ''
+}
+
+function renderStreaks(data: StreakData, t: Theme, s?: { color?: string }): string {
   const width = 380, height = 170
-  const colW = width / 2
-  const currentColor = t.accent
+  const currentColor = streaksSafeColor(s?.color, t.accent)
   const maxColor = t.text
 
-  const currentSub = data.current_start ? fmtStreakDate(data.current_start) : '—'
-  const maxSub = (data.max_start || data.max_end) ? fmtStreakRange(data.max_start, data.max_end) : ''
-  const currentLine = data.current > 0 ? `since ${currentSub}` : ''
+  const leftX = 105, rightX = 275, dividerX = 190
+  const barX = 50, barW = 280
+  const fraction = data.max > 0 ? Math.max(0, Math.min(1, data.current / data.max)) : 0
+  const fillW = +(barW * fraction).toFixed(2)
 
-  const dateLines = showDates ? `
-    <text x="${colW / 2}" y="130" text-anchor="middle" font-family="${font}" font-size="9" fill="${t.text_secondary}">${esc(currentLine)}</text>
-    <text x="${colW + colW / 2}" y="130" text-anchor="middle" font-family="${font}" font-size="9" fill="${t.text_secondary}">${esc(maxSub)}</text>` : ''
+  const currentCaption = data.current > 0
+    ? fmtStreakCurrent(data.current_start, data.last_active_date)
+    : ''
+  const longestCaption = fmtStreakLongest(data.max_start, data.max_end)
+
+  const endDot = fillW > 0
+    ? `<circle cx="${(barX + fillW).toFixed(2)}" cy="94.5" r="3.5" fill="${currentColor}"/>`
+    : ''
 
   const inner = `
-    <g transform="translate(${colW / 2 - 12}, 14)">${streaksFlame(currentColor)}</g>
-    <text x="${colW / 2}" y="78" text-anchor="middle" font-family="${font}" font-size="40" font-weight="800" fill="${currentColor}">${data.current}</text>
-    <text x="${colW / 2}" y="108" text-anchor="middle" font-family="${font}" font-size="11" fill="${t.text_secondary}" letter-spacing="0.5">Current Streak</text>
-    <line x1="${colW}" y1="24" x2="${colW}" y2="${height - 60}" stroke="${t.grid}" stroke-width="1"/>
-    <g transform="translate(${colW + colW / 2 - 12}, 14)">${streaksTrophy(maxColor)}</g>
-    <text x="${colW + colW / 2}" y="78" text-anchor="middle" font-family="${font}" font-size="40" font-weight="800" fill="${maxColor}">${data.max}</text>
-    <text x="${colW + colW / 2}" y="108" text-anchor="middle" font-family="${font}" font-size="11" fill="${t.text_secondary}" letter-spacing="0.5">Longest Streak</text>
-    ${dateLines}`
+    <text x="${leftX}" y="22" text-anchor="middle" font-family="${font}" font-size="10" font-weight="600" letter-spacing="1.4" fill="${t.text_secondary}">CURRENT</text>
+    <text x="${leftX}" y="66" text-anchor="middle" font-family="${font}" font-size="40" font-weight="800" fill="${currentColor}">${data.current}</text>
 
-  return cardWrapper(inner, width, height, t, '')
+    <text x="${rightX}" y="22" text-anchor="middle" font-family="${font}" font-size="10" font-weight="600" letter-spacing="1.4" fill="${t.text_secondary}">LONGEST</text>
+    <text x="${rightX}" y="66" text-anchor="middle" font-family="${font}" font-size="40" font-weight="800" fill="${maxColor}">${data.max}</text>
+
+    <line x1="${dividerX}" y1="10" x2="${dividerX}" y2="76" stroke="${t.card_border}" stroke-width="1"/>
+
+    <rect x="${barX}" y="92" width="${barW}" height="5" rx="2.5" fill="${t.grid}"/>
+    <rect x="${barX}" y="92" width="${fillW}" height="5" rx="2.5" fill="${currentColor}"/>
+    ${endDot}
+
+    <text x="${barX}" y="116" font-family="${font}" font-size="10" fill="${t.text_secondary}">${esc(currentCaption)}</text>
+    <text x="${barX + barW}" y="116" text-anchor="end" font-family="${font}" font-size="10" fill="${t.text_secondary}">${esc(longestCaption)}</text>`
+
+  return cardWrapper(inner, width, height, t, 'Streaks')
 }
 
 function achievementIconSvg(iconType: string, color: string): string {

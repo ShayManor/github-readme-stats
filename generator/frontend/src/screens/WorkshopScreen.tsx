@@ -494,21 +494,12 @@ export function WorkshopScreen({
                             )}
 
                             {w.id === 'streaks' && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-gray-500">Show dates</span>
-                                <button
-                                  onClick={() => updateWidgetSetting('streaks', 'show_dates', !getWidgetSetting('streaks', 'show_dates', true))}
-                                  className={`w-8 h-4 rounded-full transition-colors relative ${
-                                    getWidgetSetting('streaks', 'show_dates', true) ? 'bg-blue-500' : 'bg-gray-300'
-                                  }`}
-                                  aria-pressed={getWidgetSetting('streaks', 'show_dates', true)}
-                                >
-                                  <span
-                                    className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
-                                      getWidgetSetting('streaks', 'show_dates', true) ? 'translate-x-4' : 'translate-x-0.5'
-                                    }`}
-                                  />
-                                </button>
+                              <div>
+                                <span className="text-[10px] text-gray-500 block mb-1.5">Streak color</span>
+                                <ColorPicker
+                                  value={getWidgetSetting('streaks', 'color', '#58a6ff')}
+                                  onChange={v => updateWidgetSetting('streaks', 'color', v)}
+                                />
                               </div>
                             )}
 

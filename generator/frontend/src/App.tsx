@@ -18,7 +18,7 @@ export type Achievement = {
 export type PerWidgetSettings = {
   grade?: { max_tags?: number }
   impact?: { line_color?: string }
-  streaks?: { show_dates?: boolean }
+  streaks?: { color?: string }
   collaborators?: { max_count?: number; bar_color?: string }
   focus?: { max_categories?: number }
   languages?: { max_languages?: number }

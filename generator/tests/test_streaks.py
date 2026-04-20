@@ -122,27 +122,81 @@ def test_render_streaks_contains_values():
     assert "</svg>" in svg
     assert ">7<" in svg
     assert ">42<" in svg
-    assert "Current" in svg
-    assert "Longest" in svg
+    assert "CURRENT" in svg
+    assert "LONGEST" in svg
 
 
 def test_render_streaks_zero_values_render():
     data = StreakData(current=0, max=0)
     svg = render_streaks_widget(data, theme_name="dark")
     assert ">0<" in svg
-    assert "Current" in svg
-    assert "Longest" in svg
+    assert "CURRENT" in svg
+    assert "LONGEST" in svg
 
 
-def test_render_streaks_hides_dates_when_disabled():
+def test_render_streaks_custom_color_applies_to_current_and_bar():
     data = StreakData(
         current=7, max=42,
         current_start="2026-04-13", last_active_date="2026-04-19",
         max_start="2024-03-01", max_end="2024-04-11",
     )
-    svg = render_streaks_widget(data, theme_name="dark", settings={"show_dates": False})
-    assert "2026-04-13" not in svg
-    assert "2024-03-01" not in svg
+    svg = render_streaks_widget(data, theme_name="dark", settings={"color": "#ff00aa"})
+    # Current number + bar fill + end-cap dot all use the override.
+    assert svg.count("#ff00aa") >= 3
+    # Theme accent (#58a6ff) must not leak through when overridden.
+    assert "#58a6ff" not in svg
+
+
+def test_render_streaks_invalid_color_falls_back_to_theme():
+    data = StreakData(current=3, max=10, current_start="2026-04-18",
+                      last_active_date="2026-04-20",
+                      max_start="2025-01-01", max_end="2025-01-10")
+    svg = render_streaks_widget(data, theme_name="dark",
+                                settings={"color": "javascript:alert(1)"})
+    assert "javascript" not in svg
+    assert "#58a6ff" in svg  # theme accent fallback
+
+
+def test_render_streaks_cross_year_longest_shows_both_years():
+    data = StreakData(
+        current=5, max=37,
+        current_start="2026-04-16", last_active_date="2026-04-20",
+        max_start="2024-12-20", max_end="2025-01-25",
+    )
+    svg = render_streaks_widget(data, theme_name="dark")
+    assert "Dec 20, 2024" in svg
+    assert "Jan 25, 2025" in svg
+
+
+def test_render_streaks_same_year_longest_has_single_year_suffix():
+    data = StreakData(
+        current=5, max=37,
+        current_start="2026-04-16", last_active_date="2026-04-20",
+        max_start="2024-03-01", max_end="2024-04-11",
+    )
+    svg = render_streaks_widget(data, theme_name="dark")
+    # Start has no year, end does.
+    assert "Mar 1 – Apr 11, 2024" in svg
+
+
+def test_render_streaks_current_caption_omits_year_when_same_year():
+    data = StreakData(
+        current=7, max=42,
+        current_start="2026-04-13", last_active_date="2026-04-20",
+        max_start="2024-03-01", max_end="2024-04-11",
+    )
+    svg = render_streaks_widget(data, theme_name="dark")
+    assert "Apr 13 – Today" in svg
+
+
+def test_render_streaks_current_caption_adds_year_across_year_boundary():
+    data = StreakData(
+        current=40, max=50,
+        current_start="2025-12-20", last_active_date="2026-01-28",
+        max_start="2024-03-01", max_end="2024-04-11",
+    )
+    svg = render_streaks_widget(data, theme_name="dark")
+    assert "Dec 20, 2025 – Today" in svg
 
 
 def test_generate_widgets_includes_streaks_when_enabled(freeze_today):
