@@ -56,3 +56,13 @@ class AchievementData:
     subtitle: str = ""
     event_date: str = ""
     icon: str = "trophy"      # trophy, medal, star, hackathon
+
+
+@dataclass
+class StreakData:
+    current: int = 0               # consecutive days ending today (or yesterday under grace)
+    max: int = 0                   # all-time longest observed streak
+    current_start: str = ""        # ISO date the current streak started, "" if current == 0
+    last_active_date: str = ""     # most recent date with contributions in the window
+    max_start: str = ""            # ISO date the max streak started (best-effort)
+    max_end: str = ""              # ISO date the max streak ended (best-effort)
