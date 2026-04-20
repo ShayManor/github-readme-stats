@@ -41,7 +41,7 @@ services:
     volumes:
       - ${HOME}/ghstats/data/generator:/app/data
     ports:
-      - "5002:5002"
+      - "127.0.0.1:5002:5002"
     depends_on:
       - fetcher
 
@@ -80,6 +80,6 @@ services:
     environment:
       GENERATOR_URL: http://generator:5002
     ports:
-      - "5003:5003"
+      - "127.0.0.1:5003:5003"
     depends_on:
       - generator

@@ -184,7 +184,7 @@ app.config["MAX_CONTENT_LENGTH"] = 128 * 1024
 # ["max_count"])` raise, or by ballooning the DB with unbounded fields.
 # We normalize to an explicit allow-list of fields and coerce/trim types.
 
-_ALLOWED_WIDGETS = {"grade", "impact", "streaks", "collaborators", "focus", "languages", "achievements"}
+_ALLOWED_WIDGETS = {"name", "grade", "impact", "streaks", "collaborators", "focus", "languages", "achievements"}
 _ALLOWED_ICONS = {"trophy", "medal", "star", "hackathon"}
 _MAX_ACHIEVEMENTS = 10
 _TITLE_MAX = 80
@@ -273,6 +273,86 @@ def _coerce_widget_settings(v) -> dict:
     return out
 
 
+def sanitize_settings_query(args) -> dict:
+    """Parse settings overrides from URL query params for the public
+    `GET /api/<u>` endpoint. This is the unauthenticated edit path — the
+    caller doesn't need to own the widget, they just craft a URL whose
+    query string encodes their chosen settings.
+
+    Accepted params (all optional, case-sensitive):
+
+        theme=<name>                   - one of THEMES keys
+        widgets=<csv>                  - enabled widget ids
+        order=<csv>                    - widget render order
+        hide=<csv>                     - languages to exclude
+        tags=<csv>                     - extra custom tags
+        <widget>.<key>=<value>         - per-widget settings (e.g. grade.max_tags=6,
+                                         impact.line_color=%23a78bfa)
+        ach=<url-safe-base64-json>     - list of {title, subtitle, event_date, icon}
+
+    Unknown keys and malformed values are silently dropped; the same
+    allow-listing rules as `sanitize_settings` apply. The result is a
+    partial settings dict that can be merged onto the user's stored
+    settings without any further validation.
+    """
+    out: dict = {}
+    if args is None:
+        return out
+
+    theme = args.get("theme")
+    if isinstance(theme, str) and theme in THEMES:
+        out["theme"] = theme
+
+    def _csv(key: str) -> list[str]:
+        v = args.get(key) or ""
+        return [s for s in (p.strip() for p in v.split(",")) if s]
+
+    if "widgets" in args:
+        out["enabled"] = [w for w in _csv("widgets") if w in _ALLOWED_WIDGETS][:20]
+    if "order" in args:
+        out["widget_order"] = [w for w in _csv("order") if w in _ALLOWED_WIDGETS][:20]
+    if "hide" in args:
+        out["hidden_languages"] = [s[:_LANG_MAX] for s in _csv("hide")[:_MAX_HIDDEN_LANGS]]
+    if "tags" in args:
+        out["custom_tags"] = [s[:_TAG_MAX] for s in _csv("tags")[:_MAX_CUSTOM_TAGS]]
+
+    # Per-widget settings via dot-notation keys. Collect first, then hand off
+    # to _coerce_widget_settings so type rules stay in exactly one place.
+    ws_raw: dict[str, dict] = {}
+    for key in args.keys():
+        if "." not in key:
+            continue
+        widget, sub = key.split(".", 1)
+        if widget not in _ALLOWED_WIDGETS:
+            continue
+        ws_raw.setdefault(widget, {})[sub] = args.get(key)
+    if ws_raw:
+        ws = _coerce_widget_settings(ws_raw)
+        if ws:
+            out["widget_settings"] = ws
+
+    # Achievements as url-safe base64(json). Compact enough for reasonable
+    # counts; longer embeds can still fall back to the authenticated path.
+    ach_raw = args.get("ach")
+    if isinstance(ach_raw, str) and ach_raw:
+        try:
+            import base64
+            padded = ach_raw + "=" * (-len(ach_raw) % 4)
+            decoded = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+            parsed = _json.loads(decoded)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, list):
+            cleaned = []
+            for a in parsed[:_MAX_ACHIEVEMENTS]:
+                ca = _coerce_achievement(a)
+                if ca:
+                    cleaned.append(ca)
+            out["achievements"] = cleaned
+
+    return out
+
+
 def sanitize_settings(body: dict) -> dict:
     """Project an untrusted JSON object down to the fields we accept.
 
@@ -357,7 +437,11 @@ def auth_github_login():
     import secrets as _secrets
     nxt = request.args.get("next", "/")
     # Only accept local relative paths to prevent open-redirect.
-    if not isinstance(nxt, str) or not nxt.startswith("/"):
+    # Reject protocol-relative ("//evil") and backslash ("/\evil") forms,
+    # which browsers resolve against the current scheme.
+    if (not isinstance(nxt, str)
+            or not nxt.startswith("/")
+            or nxt.startswith(("//", "/\\"))):
         nxt = "/"
     state = _secrets.token_urlsafe(32)
     session["oauth_state"] = state
@@ -485,9 +569,13 @@ def get_user_data(username: str):
 def _serve(username: str, widget_name: str) -> Response:
     """Serves a cached SVG for README embeds.
 
-    SVGs are only produced by POST /api/<u>/generate. Before that the
-    endpoint returns a "building" placeholder; enrollment is now OAuth-driven
-    so this path never auto-enrolls on its own.
+    Two code paths:
+      * No query overrides: return the pre-rendered composite stored in
+        widgets.db (cheap, cacheable).
+      * Query overrides present: render on-demand with the override dict
+        merged onto the owner's stored settings. Nothing is persisted; the
+        owner's widget is unaffected. This is how unauthenticated users
+        "edit" a widget — they just craft a URL.
     """
     settings_row = db.get_settings(username)
     if settings_row is None:
@@ -502,6 +590,37 @@ def _serve(username: str, widget_name: str) -> Response:
         "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
         "X-Content-Type-Options": "nosniff",
     }
+
+    # Ad-hoc render path. Only triggers for the composite — named widgets
+    # keep serving the cached per-widget SVG, which is what edge fetches.
+    overrides = sanitize_settings_query(request.args) if widget_name == "composite" else {}
+    if overrides and current_hash != "not_found":
+        # Honor the possibly-overridden theme for error placeholders.
+        override_theme = overrides.get("theme") if isinstance(overrides.get("theme"), str) else None
+        effective_theme = override_theme or theme
+        acquired = _GENERATE_SEMAPHORE.acquire(timeout=config.GENERATE_SEMAPHORE_WAIT_S)
+        if not acquired:
+            resp = jsonify({"error": "busy"})
+            resp.status_code = 503
+            resp.headers["Retry-After"] = "5"
+            return resp
+        try:
+            from . import worker
+            svg = worker.render_composite_adhoc(username, overrides)
+        except Exception:
+            log.exception("adhoc render failed for %s", username)
+            svg = None
+        finally:
+            _GENERATE_SEMAPHORE.release()
+        if svg is None:
+            return _placeholder_response("building", username, theme=effective_theme)
+        # Query-string renders are deterministic from (user, query) but
+        # depend on fetcher data that does rotate. Use a short shared cache
+        # window so bursty viewers of the same embed don't all hit compute.
+        headers = {"X-Widget-Status": "ready",
+                   "Cache-Control": "public, max-age=300",
+                   **headers_common}
+        return Response(svg, mimetype="image/svg+xml", headers=headers)
 
     if current_hash == "not_found":
         svg = db.get_current_widget(username, widget_name) or placeholder.render("not_found", username, theme=theme)
