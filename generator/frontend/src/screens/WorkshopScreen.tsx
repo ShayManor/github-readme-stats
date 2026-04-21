@@ -2,7 +2,6 @@ import { useState, useMemo, type ReactNode } from 'react'
 import DOMPurify from 'dompurify'
 import type { WidgetSettings, Achievement, PerWidgetSettings } from '../App'
 import { renderAllWidgets, type WidgetData } from '../lib/renderWidgets'
-import { signInUrl } from '../lib/auth'
 import type { Me } from '../lib/auth'
 
 // Defense-in-depth: the client-rendered preview assembles SVG from
@@ -384,11 +383,9 @@ export function WorkshopScreen({
             </div>
           )}
 
-          {!canEdit && (
+          {!canEdit && me.login && (
             <div className="banner">
-              {me.login
-                ? `Signed in as ${me.login}. Changes here produce a shareable link with query params. Only ${username} can save them permanently.`
-                : <><a href={signInUrl()}>Sign in with GitHub</a> to save these settings permanently. Otherwise, Generate gives you a drop-in URL with query params.</>}
+              {`Signed in as ${me.login}. Changes here produce a shareable link with query params. Only ${username} can save them permanently.`}
             </div>
           )}
 

@@ -125,18 +125,11 @@ def compute_grade(github_data: dict, custom_tags: list[str] = None) -> GradeData
         grade = "B-"
     elif total >= 42:
         grade = "C+"
-    elif total >= 35:
-        grade = "C"
-    elif total >= 28:
-        grade = "C-"
-    elif total >= 20:
-        grade = "D+"
-    elif total >= 12:
-        grade = "D"
-    elif total >= 5:
-        grade = "D-"
     else:
-        grade = "F"
+        # C is the floor. Anything that would previously have slid into C-,
+        # D+, D, D-, or F is clamped up to C — the widget is meant to be an
+        # encouraging profile snapshot, not a failure grade.
+        grade = "C"
 
     stats = {
         "commits": commits,
