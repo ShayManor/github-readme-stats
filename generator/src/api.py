@@ -24,9 +24,10 @@ from functools import wraps
 from threading import BoundedSemaphore, Lock
 from flask import Flask, jsonify, request, Response, send_from_directory, session
 
-from . import auth, config, db, fetcher_client, placeholder
+from . import auth, config, db, fetcher_client, placeholder, processor
 from .themes import THEMES
 from .utils import is_valid_username, settings_size_ok
+from .widgets import render_grade_widget
 import json as _json
 
 log = logging.getLogger("generator.api")
@@ -400,6 +401,12 @@ def sanitize_settings(body: dict) -> dict:
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def spa(path: str):
+    # Drop-in shortcut: `/?username=X` (or `/api/?username=X`) force-renders
+    # just the developer profile (grade) widget for that user and returns the
+    # SVG directly. No SPA, no composite — the single widget that README
+    # embeds care about. `/api/<u>` and friends keep working below.
+    if path in ("", "api", "api/") and request.args.get("username"):
+        return _serve_profile_widget(request.args.get("username", ""))
     if path.startswith("api/"):
         return jsonify({"error": "not found"}), 404
     if path:
@@ -643,6 +650,74 @@ def _placeholder_response(variant: str, username: str, theme: str = "dark") -> R
                     headers={"X-Widget-Status": variant, "Cache-Control": "no-store",
                              "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
                              "X-Content-Type-Options": "nosniff"})
+
+
+def _serve_profile_widget(username: str) -> Response:
+    """Force-generate and return the developer profile (grade) widget SVG.
+
+    Powers the `/?username=X` and `/api/?username=X` shortcuts. Unlike the
+    cached `/api/<u>` composite path, this one will auto-enroll a new user
+    (subject to the daily cap) so a first-time visitor who pastes a
+    username in the URL gets a usable SVG back on the first request.
+    Only the grade widget is rendered; no composite, no other widgets.
+    """
+    if not is_valid_username(username):
+        return jsonify({"error": "invalid_username"}), 400
+    username = username.lower()
+    if not _rate_limit("read"):
+        return jsonify({"error": "rate_limited"}), 429
+
+    settings_row = db.get_settings(username)
+    if settings_row is None:
+        if db.enrollments_today() >= config.ENROLLMENT_DAILY_CAP:
+            return _placeholder_response("rate_limited", username)
+        defaults = {
+            "theme": "dark",
+            "enabled": config.ENABLED_WIDGETS,
+            "widget_order": config.WIDGET_ORDER,
+        }
+        db.enroll(username, defaults)
+        settings_row = db.get_settings(username)
+        if settings_row is None:
+            return _placeholder_response("building", username)
+
+    theme_raw = settings_row["settings"].get("theme", "dark")
+    theme = theme_raw if isinstance(theme_raw, str) and theme_raw in THEMES else "dark"
+
+    acquired = _GENERATE_SEMAPHORE.acquire(timeout=config.GENERATE_SEMAPHORE_WAIT_S)
+    if not acquired:
+        resp = jsonify({"error": "busy"})
+        resp.status_code = 503
+        resp.headers["Retry-After"] = "5"
+        return resp
+    try:
+        result = fetcher_client.get_data(username)
+        payload = result.get("data") or {}
+        if payload.get("error") == "not_found":
+            return _placeholder_response("not_found", username, theme=theme)
+        grade = processor.compute_grade(
+            payload,
+            custom_tags=settings_row["settings"].get("custom_tags"),
+        )
+        ws = (settings_row["settings"].get("widget_settings") or {}).get("grade")
+        svg = render_grade_widget(grade, theme, settings=ws)
+    except Exception:
+        log.exception("profile widget render failed for %s", username)
+        return _placeholder_response("building", username, theme=theme)
+    finally:
+        _GENERATE_SEMAPHORE.release()
+
+    db.touch_last_requested(username)
+    return Response(
+        svg,
+        mimetype="image/svg+xml",
+        headers={
+            "X-Widget-Status": "ready",
+            "Cache-Control": "public, max-age=300",
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @app.route("/api/<username>/settings", methods=["GET"])

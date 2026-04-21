@@ -32,6 +32,58 @@ def test_health(client):
     assert r.get_json()["service"] == "generator"
 
 
+def test_root_with_username_param_force_renders_grade_widget(client, monkeypatch):
+    """`GET /?username=<u>` auto-enrolls and returns just the grade widget SVG,
+    force-generated from fresh fetcher data. No composite, no other widgets."""
+    from src.models import GradeData
+    monkeypatch.setattr(
+        "src.api.fetcher_client.get_data",
+        lambda u: {"data": {"user": {}, "repos": [], "events": []}, "payload_hash": "h"},
+    )
+    monkeypatch.setattr(
+        "src.api.processor.compute_grade",
+        lambda *a, **kw: GradeData(grade="A", score=88.0, stats={}, tags=[]),
+    )
+    monkeypatch.setattr("src.api.render_grade_widget", lambda *a, **kw: "<svg id='grade'/>")
+    r = client.get("/?username=alice")
+    assert r.status_code == 200
+    assert r.mimetype == "image/svg+xml"
+    assert r.headers["X-Widget-Status"] == "ready"
+    assert dbmod.get_settings("alice") is not None
+    body = r.data.decode()
+    assert "<svg" in body
+    assert "composite" not in body
+
+
+def test_api_with_username_param_also_works(client, monkeypatch):
+    """Same shortcut is available at `/api/?username=<u>` so the /api prefix
+    stays consistent for callers that expect it."""
+    from src.models import GradeData
+    monkeypatch.setattr(
+        "src.api.fetcher_client.get_data",
+        lambda u: {"data": {"user": {}, "repos": [], "events": []}, "payload_hash": "h"},
+    )
+    monkeypatch.setattr(
+        "src.api.processor.compute_grade",
+        lambda *a, **kw: GradeData(grade="A", score=88.0, stats={}, tags=[]),
+    )
+    monkeypatch.setattr("src.api.render_grade_widget", lambda *a, **kw: "<svg id='grade'/>")
+    r = client.get("/api/?username=bob")
+    assert r.status_code == 200
+    assert r.mimetype == "image/svg+xml"
+    assert r.headers["X-Widget-Status"] == "ready"
+
+
+def test_root_without_username_serves_spa(client):
+    """Plain `/` still returns the SPA (or the 'frontend not built' fallback
+    in test, where static assets aren't bundled)."""
+    r = client.get("/")
+    # Either 200 (static built) or 503 (not built) — the important thing is we
+    # don't accidentally route to the grade-widget handler.
+    assert r.status_code in (200, 503)
+    assert r.mimetype != "image/svg+xml"
+
+
 def test_get_unknown_user_returns_building_placeholder_without_enrolling(client):
     """The SVG endpoint is for README embeds — enrollment is frontend-driven
     through /data or /api/enroll, so GET /api/<u> does not auto-enroll."""
