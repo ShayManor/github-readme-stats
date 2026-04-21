@@ -355,7 +355,17 @@ export function WorkshopScreen({
             Back
           </button>
 
-          <div className="text-sm font-semibold text-gray-800 mb-6">{username}</div>
+          <div className="text-sm font-semibold text-gray-800 mb-4">{username}</div>
+
+          {canEdit && (
+            <button
+              onClick={onGenerate}
+              className="w-full py-3 rounded-xl bg-gray-800 text-white text-sm font-medium hover:bg-gray-700 transition-colors mb-6"
+            >
+              Generate →
+            </button>
+          )}
+
           {fetchError && (
             <div className="flex items-center gap-1.5 text-[10px] text-red-500 mb-6">
               <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
@@ -674,16 +684,6 @@ export function WorkshopScreen({
                 </div>
               </div>
 
-              {/* Spacer */}
-              <div className="flex-1 min-h-4" />
-
-              {/* Generate button */}
-              <button
-                onClick={onGenerate}
-                className="w-full py-3 rounded-xl bg-gray-800 text-white text-sm font-medium hover:bg-gray-700 transition-colors"
-              >
-                Generate →
-              </button>
             </>
           )}
         </div>
