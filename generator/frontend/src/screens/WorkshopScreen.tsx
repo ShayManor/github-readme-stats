@@ -370,14 +370,12 @@ export function WorkshopScreen({
 
           <div className="text-sm font-semibold text-gray-800 mb-4">{username}</div>
 
-          {canEdit && (
-            <button
-              onClick={onGenerate}
-              className="w-full py-3 rounded-xl bg-gray-800 text-white text-sm font-medium hover:bg-gray-700 transition-colors mb-6"
-            >
-              Generate →
-            </button>
-          )}
+          <button
+            onClick={onGenerate}
+            className="w-full py-3 rounded-xl bg-gray-800 text-white text-sm font-medium hover:bg-gray-700 transition-colors mb-6"
+          >
+            Generate →
+          </button>
 
           {fetchError && (
             <div className="flex items-center gap-1.5 text-[10px] text-red-500 mb-6">
@@ -389,15 +387,12 @@ export function WorkshopScreen({
           {!canEdit && (
             <div className="banner">
               {me.login
-                ? `Signed in as ${me.login}. You can only edit your own widget.`
-                : <a href={signInUrl()}>Sign in with GitHub to edit your widget</a>}
+                ? `Signed in as ${me.login}. Changes here produce a shareable link with query params. Only ${username} can save them permanently.`
+                : <><a href={signInUrl()}>Sign in with GitHub</a> to save these settings permanently. Otherwise, Generate gives you a drop-in URL with query params.</>}
             </div>
           )}
 
-          {/* Theme, Widgets, Achievements editor, Generate — owner-only */}
-          {canEdit && (
-            <>
-              {/* Theme */}
+          {/* Theme */}
               <div className="mb-5">
                 <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Theme</div>
                 <div className="flex gap-2 flex-wrap">
@@ -747,9 +742,6 @@ export function WorkshopScreen({
                   })}
                 </div>
               </div>
-
-            </>
-          )}
         </div>
 
         {/* Right preview area */}
