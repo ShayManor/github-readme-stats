@@ -9,7 +9,7 @@ collaborators, breaks down your languages, tracks your commit streaks,
 and earns you tags like `Backend`, `ML`, or `Founder #42`.
 
 ```md
-![my stats](https://gh-stats.com/YOUR_USERNAME)
+![my stats](https://gh-stats.com/api/YOUR_USERNAME)
 ```
 
 <img src="./assets/examples/composite-midnight.svg" width="420" alt="composite widget, midnight theme" />
@@ -32,7 +32,7 @@ and earns you tags like `Backend`, `ML`, or `Founder #42`.
 
 ## Quick start
 
-1. Open <https://gh-stats.com/>.
+1. Open <https://gh-stats.com/api/>.
 2. Sign in with GitHub. Signing in is how you prove ownership of the
    username, and it unlocks the editor.
 3. Pick a theme, reorder widgets, add any custom tags or achievements.
@@ -40,7 +40,7 @@ and earns you tags like `Backend`, `ML`, or `Founder #42`.
 5. Paste this one line into your profile README:
 
    ```md
-   ![my stats](https://gh-stats.com/YOUR_USERNAME)
+   ![my stats](https://gh-stats.com/api/YOUR_USERNAME)
    ```
 
 The image URL is stable. Once it's in your README you can change
@@ -67,7 +67,7 @@ Pass `?theme=<name>` on the URL, or pick one in the editor.
 | `paper` | <img src="./assets/examples/composite-paper.svg" width="280" /> |
 
 ```md
-![stats](https://gh-stats.com/YOUR_USERNAME?theme=onyx)
+![stats](https://gh-stats.com/api/YOUR_USERNAME?theme=onyx)
 ```
 
 ### Auto-switching for dark and light mode
@@ -76,19 +76,19 @@ Add GitHub's theme suffix to serve a different image to dark vs. light
 viewers:
 
 ```md
-![dark](https://gh-stats.com/YOUR_USERNAME?theme=onyx#gh-dark-mode-only)
-![light](https://gh-stats.com/YOUR_USERNAME?theme=clean#gh-light-mode-only)
+![dark](https://gh-stats.com/api/YOUR_USERNAME?theme=onyx#gh-dark-mode-only)
+![light](https://gh-stats.com/api/YOUR_USERNAME?theme=clean#gh-light-mode-only)
 ```
 
 Or use `<picture>` for precise `prefers-color-scheme` control:
 
 ```html
 <picture>
-  <source srcset="https://gh-stats.com/YOUR_USERNAME?theme=onyx"
+  <source srcset="https://gh-stats.com/api/YOUR_USERNAME?theme=onyx"
           media="(prefers-color-scheme: dark)" />
-  <source srcset="https://gh-stats.com/YOUR_USERNAME?theme=clean"
+  <source srcset="https://gh-stats.com/api/YOUR_USERNAME?theme=clean"
           media="(prefers-color-scheme: light)" />
-  <img src="https://gh-stats.com/YOUR_USERNAME" />
+  <img src="https://gh-stats.com/api/YOUR_USERNAME" />
 </picture>
 ```
 
@@ -97,7 +97,7 @@ Or use `<picture>` for precise `prefers-color-scheme` control:
 ## Individual widgets
 
 Every widget is independently addressable at
-`https://gh-stats.com/<username>/<widget>.svg`. Embed one, two, or all
+`https://gh-stats.com/api/<username>/<widget>.svg`. Embed one, two, or all
 of them.
 
 ### Grade
@@ -107,7 +107,7 @@ Overall score (0 to 100), letter grade, and your top role tags.
 <img src="./assets/examples/grade.svg" width="380" alt="grade widget" />
 
 ```md
-![grade](https://gh-stats.com/YOUR_USERNAME/grade.svg)
+![grade](https://gh-stats.com/api/YOUR_USERNAME/grade.svg)
 ```
 
 ### Impact
@@ -118,7 +118,7 @@ chart.
 <img src="./assets/examples/impact.svg" width="380" alt="impact widget" />
 
 ```md
-![impact](https://gh-stats.com/YOUR_USERNAME/impact.svg)
+![impact](https://gh-stats.com/api/YOUR_USERNAME/impact.svg)
 ```
 
 ### Streaks
@@ -128,7 +128,7 @@ Current and longest contribution streaks.
 <img src="./assets/examples/streaks.svg" width="380" alt="streaks widget" />
 
 ```md
-![streaks](https://gh-stats.com/YOUR_USERNAME/streaks.svg)
+![streaks](https://gh-stats.com/api/YOUR_USERNAME/streaks.svg)
 ```
 
 ### Top collaborators
@@ -140,7 +140,7 @@ on your card.
 <img src="./assets/examples/collaborators.svg" width="380" alt="collaborators widget" />
 
 ```md
-![collaborators](https://gh-stats.com/YOUR_USERNAME/collaborators.svg)
+![collaborators](https://gh-stats.com/api/YOUR_USERNAME/collaborators.svg)
 ```
 
 ### Recent focus
@@ -150,7 +150,7 @@ What you have actually been working on lately, grouped by topic.
 <img src="./assets/examples/focus.svg" width="380" alt="focus widget" />
 
 ```md
-![focus](https://gh-stats.com/YOUR_USERNAME/focus.svg)
+![focus](https://gh-stats.com/api/YOUR_USERNAME/focus.svg)
 ```
 
 ### Languages
@@ -161,7 +161,7 @@ no meaningful contribution are ignored.
 <img src="./assets/examples/languages.svg" width="380" alt="languages widget" />
 
 ```md
-![languages](https://gh-stats.com/YOUR_USERNAME/languages.svg)
+![languages](https://gh-stats.com/api/YOUR_USERNAME/languages.svg)
 ```
 
 ### Achievements
@@ -171,7 +171,7 @@ Hand-entered lines for hackathons, talks, awards, and certifications.
 <img src="./assets/examples/achievements.svg" width="380" alt="achievements widget" />
 
 ```md
-![achievements](https://gh-stats.com/YOUR_USERNAME/achievements.svg)
+![achievements](https://gh-stats.com/api/YOUR_USERNAME/achievements.svg)
 ```
 
 ### Side by side
@@ -181,8 +181,8 @@ two widgets next to each other.
 
 ```html
 <table><tr>
-  <td><img src="https://gh-stats.com/YOUR_USERNAME/grade.svg" /></td>
-  <td><img src="https://gh-stats.com/YOUR_USERNAME/languages.svg" /></td>
+  <td><img src="https://gh-stats.com/api/YOUR_USERNAME/grade.svg" /></td>
+  <td><img src="https://gh-stats.com/api/YOUR_USERNAME/languages.svg" /></td>
 </tr></table>
 ```
 
@@ -260,7 +260,7 @@ Every 15 minutes, automatically. You can also click **Refresh now**
 once per account for an immediate update.
 
 **How do I edit my widget?**
-Sign in with GitHub at <https://gh-stats.com/>. Only the account whose
+Sign in with GitHub at <https://gh-stats.com/api/>. Only the account whose
 login matches the username can edit that widget's settings.
 
 **Can I change the widget without re-embedding?**
@@ -341,25 +341,25 @@ Embed two widgets side by side with an HTML table:
 
 ```html
 <table><tr>
-  <td><img src="https://gh-stats.com/YOUR_USERNAME/grade.svg" /></td>
-  <td><img src="https://gh-stats.com/YOUR_USERNAME/languages.svg" /></td>
+  <td><img src="https://gh-stats.com/api/YOUR_USERNAME/grade.svg" /></td>
+  <td><img src="https://gh-stats.com/api/YOUR_USERNAME/languages.svg" /></td>
 </tr></table>
 ```
 
 Stack a custom composite with only three widgets:
 
 ```md
-![stats](https://gh-stats.com/YOUR_USERNAME?theme=onyx&widgets=grade,streaks,languages&order=grade,streaks,languages)
+![stats](https://gh-stats.com/api/YOUR_USERNAME?theme=onyx&widgets=grade,streaks,languages&order=grade,streaks,languages)
 ```
 
 Recolor the impact line:
 
 ```md
-![impact](https://gh-stats.com/YOUR_USERNAME/impact.svg?impact.line_color=%23a78bfa)
+![impact](https://gh-stats.com/api/YOUR_USERNAME/impact.svg?impact.line_color=%23a78bfa)
 ```
 
 Hide noisy languages:
 
 ```md
-![langs](https://gh-stats.com/YOUR_USERNAME/languages.svg?hide=HTML,CSS,Makefile)
+![langs](https://gh-stats.com/api/YOUR_USERNAME/languages.svg?hide=HTML,CSS,Makefile)
 ```
