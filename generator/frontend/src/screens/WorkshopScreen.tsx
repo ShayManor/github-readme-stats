@@ -247,6 +247,10 @@ export function WorkshopScreen({
   // Index being dragged + index currently hovered (for drop-line indicator).
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
+  // Same pattern for the achievements list so the two drag interactions
+  // don't share state and fight each other.
+  const [achDragIndex, setAchDragIndex] = useState<number | null>(null)
+  const [achDropIndex, setAchDropIndex] = useState<number | null>(null)
 
   // Build the render-order list from settings.widgetOrder, tolerating
   // stale persisted data: drop unknown ids, append any known widgets
@@ -321,6 +325,15 @@ export function WorkshopScreen({
 
   const removeAchievement = (idx: number) => {
     updateSetting('achievements', settings.achievements.filter((_, i) => i !== idx))
+  }
+
+  const moveAchievement = (from: number, to: number) => {
+    const list = settings.achievements
+    if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return
+    const next = list.slice()
+    const [item] = next.splice(from, 1)
+    next.splice(to, 0, item)
+    updateSetting('achievements', next)
   }
 
   // Render SVG client-side whenever settings change (instant, no API call)
@@ -614,9 +627,57 @@ export function WorkshopScreen({
                                   />
                                 </div>
                                 <div className="flex flex-col gap-2">
-                                  {settings.achievements.map((ach, aidx) => (
-                                    <div key={aidx} className="p-2.5 rounded-lg border border-gray-100 bg-white">
+                                  {settings.achievements.map((ach, aidx) => {
+                                    const achIsDragging = achDragIndex === aidx
+                                    const achShowLineAbove = aidx > 0 && achDropIndex === aidx && achDragIndex !== null && achDragIndex !== aidx
+                                    const achShowLineBelow = aidx === settings.achievements.length - 1 && achDropIndex === settings.achievements.length && achDragIndex !== null
+                                    return (
+                                    <div key={aidx}>
+                                      {achShowLineAbove && <div className="h-0.5 bg-gray-900 rounded-full mx-2 mb-0.5" />}
+                                      <div
+                                        className={`p-2.5 rounded-lg border border-gray-100 bg-white transition-opacity ${achIsDragging ? 'opacity-40' : ''}`}
+                                        draggable
+                                        onDragStart={e => {
+                                          setAchDragIndex(aidx)
+                                          e.dataTransfer.effectAllowed = 'move'
+                                          e.dataTransfer.setData('text/plain', String(aidx))
+                                        }}
+                                        onDragOver={e => {
+                                          if (achDragIndex === null) return
+                                          e.preventDefault()
+                                          e.dataTransfer.dropEffect = 'move'
+                                          const rect = e.currentTarget.getBoundingClientRect()
+                                          const after = e.clientY - rect.top > rect.height / 2
+                                          const target = after ? aidx + 1 : aidx
+                                          if (target === achDragIndex || target === achDragIndex + 1) {
+                                            setAchDropIndex(null)
+                                          } else {
+                                            setAchDropIndex(target)
+                                          }
+                                        }}
+                                        onDrop={e => {
+                                          e.preventDefault()
+                                          if (achDragIndex === null || achDropIndex === null) {
+                                            setAchDragIndex(null); setAchDropIndex(null); return
+                                          }
+                                          const to = achDropIndex > achDragIndex ? achDropIndex - 1 : achDropIndex
+                                          moveAchievement(achDragIndex, to)
+                                          setAchDragIndex(null); setAchDropIndex(null)
+                                        }}
+                                        onDragEnd={() => { setAchDragIndex(null); setAchDropIndex(null) }}
+                                      >
                                       <div className="flex items-center gap-1.5 mb-2">
+                                        <span
+                                          className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing select-none pr-1"
+                                          title="Drag to reorder"
+                                          aria-hidden
+                                        >
+                                          <svg width="10" height="12" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">
+                                            <circle cx="2.5" cy="3"  r="1.2"/><circle cx="7.5" cy="3"  r="1.2"/>
+                                            <circle cx="2.5" cy="8"  r="1.2"/><circle cx="7.5" cy="8"  r="1.2"/>
+                                            <circle cx="2.5" cy="13" r="1.2"/><circle cx="7.5" cy="13" r="1.2"/>
+                                          </svg>
+                                        </span>
                                         {ICONS.map(ic => {
                                           const selected = ach.icon === ic.id
                                           return (
@@ -665,8 +726,11 @@ export function WorkshopScreen({
                                         placeholder="Date (e.g. 2025-01)"
                                         className="w-full px-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300"
                                       />
+                                      </div>
+                                      {achShowLineBelow && <div className="h-0.5 bg-gray-900 rounded-full mx-2 mt-0.5" />}
                                     </div>
-                                  ))}
+                                    )
+                                  })}
                                   <button
                                     onClick={addAchievement}
                                     className="w-full py-2 rounded-lg border border-dashed border-gray-200 text-xs text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-colors"
