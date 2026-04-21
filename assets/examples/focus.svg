@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="380" height="234" viewBox="0 0 380 234" fill="none">
+  <defs>
+    <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    <clipPath id="avatarClip"><circle cx="0" cy="0" r="18"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="378" height="232" rx="10" ry="10"
+        fill="#1a2230" stroke="#2a3444" stroke-width="1" filter="url(#shadow)"/>
+  <text x="20" y="30" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#7d8895" letter-spacing="0.8" opacity="0.7">RECENT FOCUS</text>
+  <g transform="translate(0, 36)">
+    
+    <g transform="translate(16, 0)">
+      <text x="0" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="600" fill="#d1d9e0">Backend</text>
+      <rect x="90" y="4" width="210" height="14" rx="7" fill="#1e2836"/>
+      <rect x="90" y="4" width="210.0" height="14" rx="7" fill="#58a6ff" opacity="0.8">
+        <animate attributeName="width" from="0" to="210.0" dur="0.7s" fill="freeze"/>
+      </rect>
+      <text x="90" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="9" fill="#7d8895">412 commits</text>
+      <text x="308" y="15" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="700" fill="#58a6ff">38%</text>
+    </g>
+    <g transform="translate(16, 36)">
+      <text x="0" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="600" fill="#d1d9e0">ML</text>
+      <rect x="90" y="4" width="210" height="14" rx="7" fill="#1e2836"/>
+      <rect x="90" y="4" width="132.6315789473684" height="14" rx="7" fill="#3fb950" opacity="0.8">
+        <animate attributeName="width" from="0" to="132.6315789473684" dur="0.7s" fill="freeze"/>
+      </rect>
+      <text x="90" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="9" fill="#7d8895">260 commits</text>
+      <text x="308" y="15" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="700" fill="#3fb950">24%</text>
+    </g>
+    <g transform="translate(16, 72)">
+      <text x="0" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="600" fill="#d1d9e0">Frontend</text>
+      <rect x="90" y="4" width="210" height="14" rx="7" fill="#1e2836"/>
+      <rect x="90" y="4" width="99.47368421052632" height="14" rx="7" fill="#bc8cff" opacity="0.8">
+        <animate attributeName="width" from="0" to="99.47368421052632" dur="0.7s" fill="freeze"/>
+      </rect>
+      <text x="90" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="9" fill="#7d8895">195 commits</text>
+      <text x="308" y="15" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="700" fill="#bc8cff">18%</text>
+    </g>
+    <g transform="translate(16, 108)">
+      <text x="0" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="600" fill="#d1d9e0">DevOps</text>
+      <rect x="90" y="4" width="210" height="14" rx="7" fill="#1e2836"/>
+      <rect x="90" y="4" width="66.3157894736842" height="14" rx="7" fill="#d29922" opacity="0.8">
+        <animate attributeName="width" from="0" to="66.3157894736842" dur="0.7s" fill="freeze"/>
+      </rect>
+      <text x="90" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="9" fill="#7d8895">130 commits</text>
+      <text x="308" y="15" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="700" fill="#d29922">12%</text>
+    </g>
+    <g transform="translate(16, 144)">
+      <text x="0" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="600" fill="#d1d9e0">Cloud</text>
+      <rect x="90" y="4" width="210" height="14" rx="7" fill="#1e2836"/>
+      <rect x="90" y="4" width="44.21052631578947" height="14" rx="7" fill="#f0883e" opacity="0.8">
+        <animate attributeName="width" from="0" to="44.21052631578947" dur="0.7s" fill="freeze"/>
+      </rect>
+      <text x="90" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="9" fill="#7d8895">87 commits</text>
+      <text x="308" y="15" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="700" fill="#f0883e">8%</text>
+    </g>
+    <text x="16" y="188" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="9" fill="#7d8895" opacity="0.7">Recent activity · last year</text>
+  </g>
+</svg>

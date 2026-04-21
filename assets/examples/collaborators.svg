@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="380" height="298" viewBox="0 0 380 298" fill="none">
+  <defs>
+    <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    <clipPath id="avatarClip"><circle cx="0" cy="0" r="18"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="378" height="296" rx="10" ry="10"
+        fill="#1a2230" stroke="#2a3444" stroke-width="1" filter="url(#shadow)"/>
+  <text x="20" y="30" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#7d8895" letter-spacing="0.8" opacity="0.7">TOP COLLABORATORS</text>
+  <g transform="translate(0, 36)">
+    
+    <g transform="translate(36, 20)">
+      
+            <circle cx="0" cy="0" r="18" fill="hsl(285, 50%, 40%)"/>
+            <text x="0" y="1" text-anchor="middle" dominant-baseline="middle"
+                  font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+                  font-size="14" font-weight="600" fill="white">T</text>
+      <text x="28" y="-2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#d1d9e0">torvalds</text>
+      <text x="28" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#7d8895">4 repos · 142 commits</text>
+      <rect x="200" y="-6" width="130" height="8" rx="4" fill="#1e2836"/>
+      <rect x="200" y="-6" width="120.0" height="8" rx="4" fill="#bc8cff" opacity="0.8">
+        <animate attributeName="width" from="0" to="120.0" dur="0.6s" fill="freeze"/>
+      </rect>
+    </g>
+    <g transform="translate(36, 70)">
+      
+            <circle cx="0" cy="0" r="18" fill="hsl(165, 50%, 40%)"/>
+            <text x="0" y="1" text-anchor="middle" dominant-baseline="middle"
+                  font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+                  font-size="14" font-weight="600" fill="white">G</text>
+      <text x="28" y="-2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#d1d9e0">gaearon</text>
+      <text x="28" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#7d8895">3 repos · 98 commits</text>
+      <rect x="200" y="-6" width="130" height="8" rx="4" fill="#1e2836"/>
+      <rect x="200" y="-6" width="82.8169014084507" height="8" rx="4" fill="#bc8cff" opacity="0.8">
+        <animate attributeName="width" from="0" to="82.8169014084507" dur="0.6s" fill="freeze"/>
+      </rect>
+    </g>
+    <g transform="translate(36, 120)">
+      
+            <circle cx="0" cy="0" r="18" fill="hsl(238, 50%, 40%)"/>
+            <text x="0" y="1" text-anchor="middle" dominant-baseline="middle"
+                  font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+                  font-size="14" font-weight="600" fill="white">S</text>
+      <text x="28" y="-2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#d1d9e0">sindresorhus</text>
+      <text x="28" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#7d8895">2 repos · 64 commits</text>
+      <rect x="200" y="-6" width="130" height="8" rx="4" fill="#1e2836"/>
+      <rect x="200" y="-6" width="54.08450704225352" height="8" rx="4" fill="#bc8cff" opacity="0.8">
+        <animate attributeName="width" from="0" to="54.08450704225352" dur="0.6s" fill="freeze"/>
+      </rect>
+    </g>
+    <g transform="translate(36, 170)">
+      
+            <circle cx="0" cy="0" r="18" fill="hsl(157, 50%, 40%)"/>
+            <text x="0" y="1" text-anchor="middle" dominant-baseline="middle"
+                  font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+                  font-size="14" font-weight="600" fill="white">T</text>
+      <text x="28" y="-2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#d1d9e0">tj</text>
+      <text x="28" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#7d8895">2 repos · 47 commits</text>
+      <rect x="200" y="-6" width="130" height="8" rx="4" fill="#1e2836"/>
+      <rect x="200" y="-6" width="39.71830985915493" height="8" rx="4" fill="#bc8cff" opacity="0.8">
+        <animate attributeName="width" from="0" to="39.71830985915493" dur="0.6s" fill="freeze"/>
+      </rect>
+    </g>
+    <g transform="translate(36, 220)">
+      
+            <circle cx="0" cy="0" r="18" fill="hsl(231, 50%, 40%)"/>
+            <text x="0" y="1" text-anchor="middle" dominant-baseline="middle"
+                  font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+                  font-size="14" font-weight="600" fill="white">Y</text>
+      <text x="28" y="-2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#d1d9e0">yyx990803</text>
+      <text x="28" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#7d8895">1 repos · 31 commits</text>
+      <rect x="200" y="-6" width="130" height="8" rx="4" fill="#1e2836"/>
+      <rect x="200" y="-6" width="26.197183098591548" height="8" rx="4" fill="#bc8cff" opacity="0.8">
+        <animate attributeName="width" from="0" to="26.197183098591548" dur="0.6s" fill="freeze"/>
+      </rect>
+    </g>
+  </g>
+</svg>

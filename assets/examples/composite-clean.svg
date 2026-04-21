@@ -1,0 +1,543 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="420" height="1756" viewBox="0 0 420 1756">
+  <rect width="420" height="1756" rx="16" fill="#ffffff"/>
+  <rect x="0.5" y="0.5" width="419" height="1755" rx="16"
+        fill="none" stroke="#d8dee4" stroke-width="1"/>
+  
+  
+    <svg x="20" y="20" width="380" height="226" viewBox="0 0 380 226">
+      
+  <defs>
+    <filter id="grade_shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    <clipPath id="grade_avatarClip"><circle cx="0" cy="0" r="18"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="378" height="224" rx="10" ry="10"
+        fill="#f6f8fa" stroke="#d8dee4" stroke-width="1" filter="url(#grade_shadow)"/>
+  
+  <g transform="translate(0, 0)">
+    
+    <g transform="translate(52, 48)">
+      <circle cx="0" cy="0" r="36" fill="none" stroke="#eaeef2" stroke-width="5"/>
+      <circle cx="0" cy="0" r="36" fill="none" stroke="#3fb950" stroke-width="5"
+              stroke-dasharray="226.1946710584651" stroke-dashoffset="26.23858184278195"
+              stroke-linecap="round" transform="rotate(-90)">
+        <animate attributeName="stroke-dashoffset" from="226.1946710584651" to="26.23858184278195" dur="1s" fill="freeze"/>
+      </circle>
+      <text x="0" y="10.50" text-anchor="middle"
+            font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="30" font-weight="800" fill="#3fb950">A</text>
+    </g>
+    <line x1="100" y1="16" x2="100" y2="80" stroke="#eaeef2" stroke-width="1"/>
+    <g transform="translate(114, 26)">
+      <text x="0" y="10" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="16" font-weight="700" fill="#24292f">Developer Profile</text>
+      <text x="0" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" fill="#656d76"></text>
+      <text x="0" y="50" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#656d76" letter-spacing="0.4">Score <tspan fill="#24292f" font-weight="600">88</tspan> / 100</text>
+    </g>
+    <line x1="20" y1="96" x2="360" y2="96" stroke="#eaeef2" stroke-width="0.5"/>
+    <g transform="translate(20, 100)">
+      
+      <g transform="translate(34.0, 0)">
+        <g transform="translate(-7, 0)"><g><circle cx="7" cy="7" r="3" fill="none" stroke="#656d76" stroke-width="1.4"/><circle cx="7" cy="7" r="1" fill="#656d76"/><line x1="7" y1="10" x2="7" y2="14" stroke="#656d76" stroke-width="1.4"/><line x1="7" y1="0" x2="7" y2="4" stroke="#656d76" stroke-width="1.4"/></g></g>
+        <text x="0" y="28" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="14" font-weight="700" fill="#24292f">1,423</text>
+        <text x="0" y="41" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="9" fill="#656d76">Commits</text>
+      </g>
+      <g transform="translate(102.0, 0)">
+        <g transform="translate(-7, 0)"><g><circle cx="4" cy="4" r="2" fill="none" stroke="#656d76" stroke-width="1.2"/><circle cx="10" cy="10" r="2" fill="none" stroke="#656d76" stroke-width="1.2"/><path d="M4 6v4c0 1.1.9 2 2 2h2" fill="none" stroke="#656d76" stroke-width="1.2"/></g></g>
+        <text x="0" y="28" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="14" font-weight="700" fill="#24292f">87</text>
+        <text x="0" y="41" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="9" fill="#656d76">PRs</text>
+      </g>
+      <g transform="translate(170.0, 0)">
+        <g transform="translate(-7, 0)"><g><path d="M7 1l1.8 3.6 4 .6-2.9 2.8.7 4L7 10.2 3.4 12l.7-4L1.2 5.2l4-.6z" fill="none" stroke="#656d76" stroke-width="1.2" stroke-linejoin="round"/></g></g>
+        <text x="0" y="28" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="14" font-weight="700" fill="#24292f">342</text>
+        <text x="0" y="41" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="9" fill="#656d76">Stars</text>
+      </g>
+      <g transform="translate(238.0, 0)">
+        <g transform="translate(-7, 0)"><g><rect x="2" y="1" width="10" height="12" rx="1.5" fill="none" stroke="#656d76" stroke-width="1.2"/><line x1="5" y1="4" x2="9" y2="4" stroke="#656d76" stroke-width="1"/><line x1="5" y1="6.5" x2="9" y2="6.5" stroke="#656d76" stroke-width="1"/><line x1="5" y1="9" x2="7" y2="9" stroke="#656d76" stroke-width="1"/></g></g>
+        <text x="0" y="28" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="14" font-weight="700" fill="#24292f">28</text>
+        <text x="0" y="41" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="9" fill="#656d76">Repos</text>
+      </g>
+      <g transform="translate(306.0, 0)">
+        <g transform="translate(-7, 0)"><g><circle cx="5" cy="4" r="2.5" fill="none" stroke="#656d76" stroke-width="1.2"/><path d="M0.5 12c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" fill="none" stroke="#656d76" stroke-width="1.2"/><circle cx="11" cy="3.5" r="1.8" fill="none" stroke="#656d76" stroke-width="1"/><path d="M10 7.5c1.5 0 3.5 1 3.5 3" fill="none" stroke="#656d76" stroke-width="1"/></g></g>
+        <text x="0" y="28" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="14" font-weight="700" fill="#24292f">156</text>
+        <text x="0" y="41" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="9" fill="#656d76">Followers</text>
+      </g>
+    </g>
+    <line x1="20" y1="148" x2="360" y2="148" stroke="#eaeef2" stroke-width="0.5"/>
+    <g transform="translate(20, 154)">
+      
+      <g transform="translate(0, 0)" opacity="0.9">
+        <rect width="64" height="24" rx="12" fill="#0969da" opacity="0.12"/>
+        <rect width="64" height="24" rx="12" fill="none" stroke="#0969da" stroke-width="1" opacity="0.3"/>
+        <text x="32" y="16" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="10" font-weight="500" fill="#0969da">Backend</text>
+      </g>
+      <g transform="translate(70, 0)" opacity="0.9">
+        <rect width="31" height="24" rx="12" fill="#0969da" opacity="0.12"/>
+        <rect width="31" height="24" rx="12" fill="none" stroke="#0969da" stroke-width="1" opacity="0.3"/>
+        <text x="15" y="16" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="10" font-weight="500" fill="#0969da">ML</text>
+      </g>
+      <g transform="translate(107, 0)" opacity="0.9">
+        <rect width="64" height="24" rx="12" fill="#0969da" opacity="0.12"/>
+        <rect width="64" height="24" rx="12" fill="none" stroke="#0969da" stroke-width="1" opacity="0.3"/>
+        <text x="32" y="16" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="10" font-weight="500" fill="#0969da">Systems</text>
+      </g>
+      <g transform="translate(177, 0)" opacity="0.9">
+        <rect width="51" height="24" rx="12" fill="#0969da" opacity="0.12"/>
+        <rect width="51" height="24" rx="12" fill="none" stroke="#0969da" stroke-width="1" opacity="0.3"/>
+        <text x="25" y="16" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="10" font-weight="500" fill="#0969da">Cloud</text>
+      </g>
+      <g transform="translate(234, 0)" opacity="0.9">
+        <rect width="90" height="24" rx="12" fill="#facc15" opacity="0.12"/>
+        <rect width="90" height="24" rx="12" fill="none" stroke="#facc15" stroke-width="1" opacity="0.3"/>
+        <text x="45" y="16" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="10" font-weight="500" fill="#facc15">Founder #42</text>
+      </g>
+      <g transform="translate(0, 30)" opacity="0.55">
+        <rect width="90" height="24" rx="12" fill="#0969da" opacity="0.12"/>
+        <rect width="90" height="24" rx="12" fill="none" stroke="#0969da" stroke-width="1" opacity="0.3"/>
+        <text x="45" y="16" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+              font-size="10" font-weight="500" fill="#0969da">Open source</text>
+      </g>
+    </g>
+  </g>
+
+    </svg>
+    <svg x="20" y="262" width="380" height="200" viewBox="0 0 380 200">
+      
+  <defs>
+    <filter id="impact_shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    <clipPath id="impact_avatarClip"><circle cx="0" cy="0" r="18"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="378" height="198" rx="10" ry="10"
+        fill="#f6f8fa" stroke="#d8dee4" stroke-width="1" filter="url(#impact_shadow)"/>
+  <text x="20" y="30" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#656d76" letter-spacing="0.8" opacity="0.7">IMPACT TIMELINE</text>
+  <g transform="translate(0, 36)">
+    
+    <defs>
+      <linearGradient id="impact_areaGrad" x1="0" y1="8" x2="0" y2="90" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#0969da" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="#0969da" stop-opacity="0.02"/>
+      </linearGradient>
+    </defs>
+    <text x="34" y="12.0" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="9" fill="#656d76">41</text><line x1="40" y1="8.0" x2="356" y2="8.0" stroke="#eaeef2" stroke-width="0.5" stroke-dasharray="3,3"/><text x="34" y="53.0" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="9" fill="#656d76">20</text><line x1="40" y1="49.0" x2="356" y2="49.0" stroke="#eaeef2" stroke-width="0.5" stroke-dasharray="3,3"/><text x="34" y="94.0" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="9" fill="#656d76">0</text><line x1="40" y1="90.0" x2="356" y2="90.0" stroke="#eaeef2" stroke-width="0.5" stroke-dasharray="3,3"/>
+    <text x="40.0" y="104" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="9" fill="#656d76">2025-10</text><text x="204.3" y="104" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="9" fill="#656d76">2026-01</text><text x="356.0" y="104" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="9" fill="#656d76">2026-04</text>
+    <path d="M 40.0 84.0 C 46.3 84.0, 46.3 80.0, 52.6 80.0 C 59.0 80.0, 59.0 74.0, 65.3 74.0 C 71.6 74.0, 71.6 78.0, 77.9 78.0 C 84.2 78.0, 84.2 68.0, 90.6 68.0 C 96.9 68.0, 96.9 62.0, 103.2 62.0 C 109.5 62.0, 109.5 72.0, 115.8 72.0 C 122.2 72.0, 122.2 66.0, 128.5 66.0 C 134.8 66.0, 134.8 54.0, 141.1 54.0 C 147.4 54.0, 147.4 46.0, 153.8 46.0 C 160.1 46.0, 160.1 56.0, 166.4 56.0 C 172.7 56.0, 172.7 52.0, 179.0 52.0 C 185.4 52.0, 185.4 40.0, 191.7 40.0 C 198.0 40.0, 198.0 48.0, 204.3 48.0 C 210.6 48.0, 210.6 34.0, 217.0 34.0 C 223.3 34.0, 223.3 26.0, 229.6 26.0 C 235.9 26.0, 235.9 38.0, 242.2 38.0 C 248.6 38.0, 248.6 42.0, 254.9 42.0 C 261.2 42.0, 261.2 30.0, 267.5 30.0 C 273.8 30.0, 273.8 20.0, 280.2 20.0 C 286.5 20.0, 286.5 32.0, 292.8 32.0 C 299.1 32.0, 299.1 24.0, 305.4 24.0 C 311.8 24.0, 311.8 8.0, 318.1 8.0 C 324.4 8.0, 324.4 14.0, 330.7 14.0 C 337.0 14.0, 337.0 22.0, 343.4 22.0 C 349.7 22.0, 349.7 16.0, 356.0 16.0 L 356.0 90 L 40.0 90 Z" fill="url(#impact_areaGrad)"/>
+    <path d="M 40.0 84.0 C 46.3 84.0, 46.3 80.0, 52.6 80.0 C 59.0 80.0, 59.0 74.0, 65.3 74.0 C 71.6 74.0, 71.6 78.0, 77.9 78.0 C 84.2 78.0, 84.2 68.0, 90.6 68.0 C 96.9 68.0, 96.9 62.0, 103.2 62.0 C 109.5 62.0, 109.5 72.0, 115.8 72.0 C 122.2 72.0, 122.2 66.0, 128.5 66.0 C 134.8 66.0, 134.8 54.0, 141.1 54.0 C 147.4 54.0, 147.4 46.0, 153.8 46.0 C 160.1 46.0, 160.1 56.0, 166.4 56.0 C 172.7 56.0, 172.7 52.0, 179.0 52.0 C 185.4 52.0, 185.4 40.0, 191.7 40.0 C 198.0 40.0, 198.0 48.0, 204.3 48.0 C 210.6 48.0, 210.6 34.0, 217.0 34.0 C 223.3 34.0, 223.3 26.0, 229.6 26.0 C 235.9 26.0, 235.9 38.0, 242.2 38.0 C 248.6 38.0, 248.6 42.0, 254.9 42.0 C 261.2 42.0, 261.2 30.0, 267.5 30.0 C 273.8 30.0, 273.8 20.0, 280.2 20.0 C 286.5 20.0, 286.5 32.0, 292.8 32.0 C 299.1 32.0, 299.1 24.0, 305.4 24.0 C 311.8 24.0, 311.8 8.0, 318.1 8.0 C 324.4 8.0, 324.4 14.0, 330.7 14.0 C 337.0 14.0, 337.0 22.0, 343.4 22.0 C 349.7 22.0, 349.7 16.0, 356.0 16.0" fill="none" stroke="#0969da" stroke-width="2" stroke-linecap="round"/>
+    <g transform="translate(20, 136)">
+      <text x="0" y="0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="700" fill="#24292f">577</text>
+      <text x="0" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="9" fill="#656d76">commits over 6mo</text>
+    </g>
+  </g>
+
+    </svg>
+    <svg x="20" y="478" width="380" height="170" viewBox="0 0 380 170">
+      
+  <defs>
+    <filter id="streaks_shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    <clipPath id="streaks_avatarClip"><circle cx="0" cy="0" r="18"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="378" height="168" rx="10" ry="10"
+        fill="#f6f8fa" stroke="#d8dee4" stroke-width="1" filter="url(#streaks_shadow)"/>
+  <text x="20" y="30" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#656d76" letter-spacing="0.8" opacity="0.7">STREAKS</text>
+  <g transform="translate(0, 36)">
+    
+    <text x="105" y="22" text-anchor="middle"
+          font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="10" font-weight="600" letter-spacing="1.4"
+          fill="#656d76">CURRENT</text>
+    <text x="105" y="66" text-anchor="middle"
+          font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="40" font-weight="800" fill="#0969da">23</text>
+
+    <text x="275" y="22" text-anchor="middle"
+          font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="10" font-weight="600" letter-spacing="1.4"
+          fill="#656d76">LONGEST</text>
+    <text x="275" y="66" text-anchor="middle"
+          font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="40" font-weight="800" fill="#24292f">61</text>
+
+    <line x1="190" y1="10" x2="190" y2="76"
+          stroke="#d8dee4" stroke-width="1"/>
+
+    <rect x="50" y="92" width="280" height="5" rx="2.5" fill="#eaeef2"/>
+    <rect x="50" y="92" width="105.57" height="5" rx="2.5" fill="#0969da"/>
+    <circle cx="155.57" cy="94.5" r="3.5" fill="#0969da"/>
+
+    <text x="50" y="116"
+          font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="10" fill="#656d76">Mar 30 – Today</text>
+    <text x="330" y="116" text-anchor="end"
+          font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="10" fill="#656d76">Sep 13 – Nov 12, 2025</text>
+  </g>
+
+    </svg>
+    <svg x="20" y="664" width="380" height="298" viewBox="0 0 380 298">
+      
+  <defs>
+    <filter id="collaborators_shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    <clipPath id="collaborators_avatarClip"><circle cx="0" cy="0" r="18"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="378" height="296" rx="10" ry="10"
+        fill="#f6f8fa" stroke="#d8dee4" stroke-width="1" filter="url(#collaborators_shadow)"/>
+  <text x="20" y="30" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#656d76" letter-spacing="0.8" opacity="0.7">TOP COLLABORATORS</text>
+  <g transform="translate(0, 36)">
+    
+    <g transform="translate(36, 20)">
+      
+            <circle cx="0" cy="0" r="18" fill="hsl(285, 50%, 40%)"/>
+            <text x="0" y="1" text-anchor="middle" dominant-baseline="middle"
+                  font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+                  font-size="14" font-weight="600" fill="white">T</text>
+      <text x="28" y="-2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#24292f">torvalds</text>
+      <text x="28" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#656d76">4 repos · 142 commits</text>
+      <rect x="200" y="-6" width="130" height="8" rx="4" fill="#eaeef2"/>
+      <rect x="200" y="-6" width="120.0" height="8" rx="4" fill="#8250df" opacity="0.8">
+        <animate attributeName="width" from="0" to="120.0" dur="0.6s" fill="freeze"/>
+      </rect>
+    </g>
+    <g transform="translate(36, 70)">
+      
+            <circle cx="0" cy="0" r="18" fill="hsl(165, 50%, 40%)"/>
+            <text x="0" y="1" text-anchor="middle" dominant-baseline="middle"
+                  font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+                  font-size="14" font-weight="600" fill="white">G</text>
+      <text x="28" y="-2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#24292f">gaearon</text>
+      <text x="28" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#656d76">3 repos · 98 commits</text>
+      <rect x="200" y="-6" width="130" height="8" rx="4" fill="#eaeef2"/>
+      <rect x="200" y="-6" width="82.8169014084507" height="8" rx="4" fill="#8250df" opacity="0.8">
+        <animate attributeName="width" from="0" to="82.8169014084507" dur="0.6s" fill="freeze"/>
+      </rect>
+    </g>
+    <g transform="translate(36, 120)">
+      
+            <circle cx="0" cy="0" r="18" fill="hsl(238, 50%, 40%)"/>
+            <text x="0" y="1" text-anchor="middle" dominant-baseline="middle"
+                  font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+                  font-size="14" font-weight="600" fill="white">S</text>
+      <text x="28" y="-2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#24292f">sindresorhus</text>
+      <text x="28" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#656d76">2 repos · 64 commits</text>
+      <rect x="200" y="-6" width="130" height="8" rx="4" fill="#eaeef2"/>
+      <rect x="200" y="-6" width="54.08450704225352" height="8" rx="4" fill="#8250df" opacity="0.8">
+        <animate attributeName="width" from="0" to="54.08450704225352" dur="0.6s" fill="freeze"/>
+      </rect>
+    </g>
+    <g transform="translate(36, 170)">
+      
+            <circle cx="0" cy="0" r="18" fill="hsl(157, 50%, 40%)"/>
+            <text x="0" y="1" text-anchor="middle" dominant-baseline="middle"
+                  font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+                  font-size="14" font-weight="600" fill="white">T</text>
+      <text x="28" y="-2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#24292f">tj</text>
+      <text x="28" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#656d76">2 repos · 47 commits</text>
+      <rect x="200" y="-6" width="130" height="8" rx="4" fill="#eaeef2"/>
+      <rect x="200" y="-6" width="39.71830985915493" height="8" rx="4" fill="#8250df" opacity="0.8">
+        <animate attributeName="width" from="0" to="39.71830985915493" dur="0.6s" fill="freeze"/>
+      </rect>
+    </g>
+    <g transform="translate(36, 220)">
+      
+            <circle cx="0" cy="0" r="18" fill="hsl(231, 50%, 40%)"/>
+            <text x="0" y="1" text-anchor="middle" dominant-baseline="middle"
+                  font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+                  font-size="14" font-weight="600" fill="white">Y</text>
+      <text x="28" y="-2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#24292f">yyx990803</text>
+      <text x="28" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#656d76">1 repos · 31 commits</text>
+      <rect x="200" y="-6" width="130" height="8" rx="4" fill="#eaeef2"/>
+      <rect x="200" y="-6" width="26.197183098591548" height="8" rx="4" fill="#8250df" opacity="0.8">
+        <animate attributeName="width" from="0" to="26.197183098591548" dur="0.6s" fill="freeze"/>
+      </rect>
+    </g>
+  </g>
+
+    </svg>
+    <svg x="20" y="978" width="380" height="234" viewBox="0 0 380 234">
+      
+  <defs>
+    <filter id="focus_shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    <clipPath id="focus_avatarClip"><circle cx="0" cy="0" r="18"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="378" height="232" rx="10" ry="10"
+        fill="#f6f8fa" stroke="#d8dee4" stroke-width="1" filter="url(#focus_shadow)"/>
+  <text x="20" y="30" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#656d76" letter-spacing="0.8" opacity="0.7">RECENT FOCUS</text>
+  <g transform="translate(0, 36)">
+    
+    <g transform="translate(16, 0)">
+      <text x="0" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="600" fill="#24292f">Backend</text>
+      <rect x="90" y="4" width="210" height="14" rx="7" fill="#eaeef2"/>
+      <rect x="90" y="4" width="210.0" height="14" rx="7" fill="#58a6ff" opacity="0.8">
+        <animate attributeName="width" from="0" to="210.0" dur="0.7s" fill="freeze"/>
+      </rect>
+      <text x="90" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="9" fill="#656d76">412 commits</text>
+      <text x="308" y="15" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="700" fill="#58a6ff">38%</text>
+    </g>
+    <g transform="translate(16, 36)">
+      <text x="0" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="600" fill="#24292f">ML</text>
+      <rect x="90" y="4" width="210" height="14" rx="7" fill="#eaeef2"/>
+      <rect x="90" y="4" width="132.6315789473684" height="14" rx="7" fill="#3fb950" opacity="0.8">
+        <animate attributeName="width" from="0" to="132.6315789473684" dur="0.7s" fill="freeze"/>
+      </rect>
+      <text x="90" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="9" fill="#656d76">260 commits</text>
+      <text x="308" y="15" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="700" fill="#3fb950">24%</text>
+    </g>
+    <g transform="translate(16, 72)">
+      <text x="0" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="600" fill="#24292f">Frontend</text>
+      <rect x="90" y="4" width="210" height="14" rx="7" fill="#eaeef2"/>
+      <rect x="90" y="4" width="99.47368421052632" height="14" rx="7" fill="#bc8cff" opacity="0.8">
+        <animate attributeName="width" from="0" to="99.47368421052632" dur="0.7s" fill="freeze"/>
+      </rect>
+      <text x="90" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="9" fill="#656d76">195 commits</text>
+      <text x="308" y="15" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="700" fill="#bc8cff">18%</text>
+    </g>
+    <g transform="translate(16, 108)">
+      <text x="0" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="600" fill="#24292f">DevOps</text>
+      <rect x="90" y="4" width="210" height="14" rx="7" fill="#eaeef2"/>
+      <rect x="90" y="4" width="66.3157894736842" height="14" rx="7" fill="#d29922" opacity="0.8">
+        <animate attributeName="width" from="0" to="66.3157894736842" dur="0.7s" fill="freeze"/>
+      </rect>
+      <text x="90" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="9" fill="#656d76">130 commits</text>
+      <text x="308" y="15" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="700" fill="#d29922">12%</text>
+    </g>
+    <g transform="translate(16, 144)">
+      <text x="0" y="14" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="600" fill="#24292f">Cloud</text>
+      <rect x="90" y="4" width="210" height="14" rx="7" fill="#eaeef2"/>
+      <rect x="90" y="4" width="44.21052631578947" height="14" rx="7" fill="#f0883e" opacity="0.8">
+        <animate attributeName="width" from="0" to="44.21052631578947" dur="0.7s" fill="freeze"/>
+      </rect>
+      <text x="90" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="9" fill="#656d76">87 commits</text>
+      <text x="308" y="15" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" font-weight="700" fill="#f0883e">8%</text>
+    </g>
+    <text x="16" y="188" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="9" fill="#656d76" opacity="0.7">Recent activity · last year</text>
+  </g>
+
+    </svg>
+    <svg x="20" y="1228" width="380" height="208" viewBox="0 0 380 208">
+      
+  <defs>
+    <filter id="languages_shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    <clipPath id="languages_avatarClip"><circle cx="0" cy="0" r="18"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="378" height="206" rx="10" ry="10"
+        fill="#f6f8fa" stroke="#d8dee4" stroke-width="1" filter="url(#languages_shadow)"/>
+  <text x="20" y="30" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#656d76" letter-spacing="0.8" opacity="0.7">LANGUAGES</text>
+  <g transform="translate(0, 36)">
+    
+    <g transform="translate(16, 0)">
+      
+    <circle cx="60" cy="86.0" r="44" fill="none" stroke="#3572A5" stroke-width="16"
+            stroke-dasharray="113.3 163.1" stroke-dashoffset="0.0"
+            transform="rotate(-90 60 86.0)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" from="276.5" to="0.0" dur="0.8s" fill="freeze"/>
+    </circle>
+    <circle cx="60" cy="86.0" r="44" fill="none" stroke="#3178c6" stroke-width="16"
+            stroke-dasharray="63.6 212.9" stroke-dashoffset="-113.3"
+            transform="rotate(-90 60 86.0)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" from="163.1" to="-113.3" dur="0.8s" fill="freeze"/>
+    </circle>
+    <circle cx="60" cy="86.0" r="44" fill="none" stroke="#00ADD8" stroke-width="16"
+            stroke-dasharray="41.5 235.0" stroke-dashoffset="-176.9"
+            transform="rotate(-90 60 86.0)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" from="99.5" to="-176.9" dur="0.8s" fill="freeze"/>
+    </circle>
+    <circle cx="60" cy="86.0" r="44" fill="none" stroke="#dea584" stroke-width="16"
+            stroke-dasharray="30.4 246.0" stroke-dashoffset="-218.4"
+            transform="rotate(-90 60 86.0)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" from="58.1" to="-218.4" dur="0.8s" fill="freeze"/>
+    </circle>
+    <circle cx="60" cy="86.0" r="44" fill="none" stroke="#89e051" stroke-width="16"
+            stroke-dasharray="16.6 259.9" stroke-dashoffset="-248.8"
+            transform="rotate(-90 60 86.0)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" from="27.6" to="-248.8" dur="0.8s" fill="freeze"/>
+    </circle>
+    <circle cx="60" cy="86.0" r="44" fill="none" stroke="#656d76" stroke-width="16"
+            stroke-dasharray="11.1 265.4" stroke-dashoffset="-265.4"
+            transform="rotate(-90 60 86.0)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" from="11.1" to="-265.4" dur="0.8s" fill="freeze"/>
+    </circle>
+      
+    <circle cx="60" cy="86.0" r="28" fill="#f6f8fa"/>
+    <text x="60" y="87.0" text-anchor="middle" dominant-baseline="middle"
+          font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="11" font-weight="700" fill="#24292f">Python</text>
+      
+    <g transform="translate(140, 20)">
+      <rect width="10" height="10" rx="2" fill="#3572A5"/>
+      <text x="16" y="9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" fill="#24292f">Python</text>
+      <text x="210" y="9" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" font-weight="600" fill="#656d76">41%</text>
+    </g>
+    <g transform="translate(140, 42)">
+      <rect width="10" height="10" rx="2" fill="#3178c6"/>
+      <text x="16" y="9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" fill="#24292f">TypeScript</text>
+      <text x="210" y="9" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" font-weight="600" fill="#656d76">23%</text>
+    </g>
+    <g transform="translate(140, 64)">
+      <rect width="10" height="10" rx="2" fill="#00ADD8"/>
+      <text x="16" y="9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" fill="#24292f">Go</text>
+      <text x="210" y="9" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" font-weight="600" fill="#656d76">15%</text>
+    </g>
+    <g transform="translate(140, 86)">
+      <rect width="10" height="10" rx="2" fill="#dea584"/>
+      <text x="16" y="9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" fill="#24292f">Rust</text>
+      <text x="210" y="9" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" font-weight="600" fill="#656d76">11%</text>
+    </g>
+    <g transform="translate(140, 108)">
+      <rect width="10" height="10" rx="2" fill="#89e051"/>
+      <text x="16" y="9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" fill="#24292f">Shell</text>
+      <text x="210" y="9" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" font-weight="600" fill="#656d76">6%</text>
+    </g>
+    <g transform="translate(140, 130)">
+      <rect width="10" height="10" rx="2" fill="#656d76"/>
+      <text x="16" y="9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" fill="#24292f">Other</text>
+      <text x="210" y="9" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" font-weight="600" fill="#656d76">4%</text>
+    </g>
+    </g>
+  </g>
+
+    </svg>
+    <svg x="20" y="1452" width="380" height="274" viewBox="0 0 380 274">
+      
+  <defs>
+    <filter id="achievements_shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    <clipPath id="achievements_avatarClip"><circle cx="0" cy="0" r="18"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="378" height="272" rx="10" ry="10"
+        fill="#f6f8fa" stroke="#d8dee4" stroke-width="1" filter="url(#achievements_shadow)"/>
+  <text x="20" y="30" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#656d76" letter-spacing="0.8" opacity="0.7">ACHIEVEMENTS</text>
+  <g transform="translate(0, 36)">
+    
+    <g transform="translate(16, 8)">
+      <rect width="348" height="48" rx="8" fill="#9a6700" opacity="0.06"/>
+      <rect width="348" height="48" rx="8" fill="none" stroke="#9a6700" stroke-width="0.5" opacity="0.3"/>
+      <g transform="translate(12, 12)">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <rect x="4" y="5" width="16" height="11" rx="1" fill="none" stroke="#9a6700" stroke-width="1.5"/>
+          <rect x="3" y="16" width="18" height="1.5" rx="0.5" fill="#9a6700" opacity="0.85"/>
+          <path d="M9 9l-2 3 2 3m6-6l2 3-2 3" stroke="#9a6700" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </g>
+      <text x="48" y="20" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#24292f">Hackathon winner</text>
+      <text x="48" y="36" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#656d76">Y Combinator AI Hackathon · 2025-11</text>
+    </g>
+    <g transform="translate(16, 64)">
+      <rect width="348" height="48" rx="8" fill="#1a7f37" opacity="0.06"/>
+      <rect width="348" height="48" rx="8" fill="none" stroke="#1a7f37" stroke-width="0.5" opacity="0.3"/>
+      <g transform="translate(12, 12)">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                fill="none" stroke="#1a7f37" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>
+      </g>
+      <text x="48" y="20" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#24292f">Speaker at PyCon</text>
+      <text x="48" y="36" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#656d76">Async at scale · 2024-05</text>
+    </g>
+    <g transform="translate(16, 120)">
+      <rect width="348" height="48" rx="8" fill="#0969da" opacity="0.06"/>
+      <rect width="348" height="48" rx="8" fill="none" stroke="#0969da" stroke-width="0.5" opacity="0.3"/>
+      <g transform="translate(12, 12)">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <path d="M7 2h10v2h2.5c.8 0 1.5.7 1.5 1.5V8c0 1.7-1.3 3-3 3h-.5c-.5 1.5-1.8 2.7-3.5 3v2.5h3c.6 0 1 .4 1 1s-.4 1-1 1H7c-.6 0-1-.4-1-1s.4-1 1-1h3V14c-1.7-.3-3-1.5-3.5-3H6c-1.7 0-3-1.3-3-3V5.5C3 4.7 3.7 4 4.5 4H7V2zm0 4H4.5v2c0 .8.7 1.5 1.5 1.5h1V6zm12.5 0H17v3.5h1c.8 0 1.5-.7 1.5-1.5V6z" fill="#0969da" opacity="0.85"/>
+        </svg>
+      </g>
+      <text x="48" y="20" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#24292f">Open Source Award</text>
+      <text x="48" y="36" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#656d76">GitHub Stars program · 2024-01</text>
+    </g>
+    <g transform="translate(16, 176)">
+      <rect width="348" height="48" rx="8" fill="#8250df" opacity="0.06"/>
+      <rect width="348" height="48" rx="8" fill="none" stroke="#8250df" stroke-width="0.5" opacity="0.3"/>
+      <g transform="translate(12, 12)">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <circle cx="12" cy="14" r="5" fill="#8250df" opacity="0.2"/>
+          <circle cx="12" cy="14" r="4" fill="none" stroke="#8250df" stroke-width="1.5"/>
+          <path d="M12 11.5l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z" fill="#8250df"/>
+          <path d="M9 3l3 8m0-8l3 8m-6-8h6" stroke="#8250df" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        </svg>
+      </g>
+      <text x="48" y="20" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="13" font-weight="600" fill="#24292f">AWS Certified Solutions Architect</text>
+      <text x="48" y="36" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="10" fill="#656d76">Professional · 2023-09</text>
+    </g>
+  </g>
+
+    </svg>
+  <text x="210" y="1748" text-anchor="middle"
+        font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+        font-size="9" fill="#656d76" opacity="0.5">Generated with gh-stats</text>
+</svg>

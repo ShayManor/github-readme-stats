@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="380" height="208" viewBox="0 0 380 208" fill="none">
+  <defs>
+    <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    <clipPath id="avatarClip"><circle cx="0" cy="0" r="18"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="378" height="206" rx="10" ry="10"
+        fill="#1a2230" stroke="#2a3444" stroke-width="1" filter="url(#shadow)"/>
+  <text x="20" y="30" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#7d8895" letter-spacing="0.8" opacity="0.7">LANGUAGES</text>
+  <g transform="translate(0, 36)">
+    
+    <g transform="translate(16, 0)">
+      
+    <circle cx="60" cy="86.0" r="44" fill="none" stroke="#3572A5" stroke-width="16"
+            stroke-dasharray="113.3 163.1" stroke-dashoffset="0.0"
+            transform="rotate(-90 60 86.0)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" from="276.5" to="0.0" dur="0.8s" fill="freeze"/>
+    </circle>
+    <circle cx="60" cy="86.0" r="44" fill="none" stroke="#3178c6" stroke-width="16"
+            stroke-dasharray="63.6 212.9" stroke-dashoffset="-113.3"
+            transform="rotate(-90 60 86.0)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" from="163.1" to="-113.3" dur="0.8s" fill="freeze"/>
+    </circle>
+    <circle cx="60" cy="86.0" r="44" fill="none" stroke="#00ADD8" stroke-width="16"
+            stroke-dasharray="41.5 235.0" stroke-dashoffset="-176.9"
+            transform="rotate(-90 60 86.0)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" from="99.5" to="-176.9" dur="0.8s" fill="freeze"/>
+    </circle>
+    <circle cx="60" cy="86.0" r="44" fill="none" stroke="#dea584" stroke-width="16"
+            stroke-dasharray="30.4 246.0" stroke-dashoffset="-218.4"
+            transform="rotate(-90 60 86.0)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" from="58.1" to="-218.4" dur="0.8s" fill="freeze"/>
+    </circle>
+    <circle cx="60" cy="86.0" r="44" fill="none" stroke="#89e051" stroke-width="16"
+            stroke-dasharray="16.6 259.9" stroke-dashoffset="-248.8"
+            transform="rotate(-90 60 86.0)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" from="27.6" to="-248.8" dur="0.8s" fill="freeze"/>
+    </circle>
+    <circle cx="60" cy="86.0" r="44" fill="none" stroke="#7d8895" stroke-width="16"
+            stroke-dasharray="11.1 265.4" stroke-dashoffset="-265.4"
+            transform="rotate(-90 60 86.0)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" from="11.1" to="-265.4" dur="0.8s" fill="freeze"/>
+    </circle>
+      
+    <circle cx="60" cy="86.0" r="28" fill="#1a2230"/>
+    <text x="60" y="87.0" text-anchor="middle" dominant-baseline="middle"
+          font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="11" font-weight="700" fill="#d1d9e0">Python</text>
+      
+    <g transform="translate(140, 20)">
+      <rect width="10" height="10" rx="2" fill="#3572A5"/>
+      <text x="16" y="9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" fill="#d1d9e0">Python</text>
+      <text x="210" y="9" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" font-weight="600" fill="#7d8895">41%</text>
+    </g>
+    <g transform="translate(140, 42)">
+      <rect width="10" height="10" rx="2" fill="#3178c6"/>
+      <text x="16" y="9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" fill="#d1d9e0">TypeScript</text>
+      <text x="210" y="9" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" font-weight="600" fill="#7d8895">23%</text>
+    </g>
+    <g transform="translate(140, 64)">
+      <rect width="10" height="10" rx="2" fill="#00ADD8"/>
+      <text x="16" y="9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" fill="#d1d9e0">Go</text>
+      <text x="210" y="9" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" font-weight="600" fill="#7d8895">15%</text>
+    </g>
+    <g transform="translate(140, 86)">
+      <rect width="10" height="10" rx="2" fill="#dea584"/>
+      <text x="16" y="9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" fill="#d1d9e0">Rust</text>
+      <text x="210" y="9" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" font-weight="600" fill="#7d8895">11%</text>
+    </g>
+    <g transform="translate(140, 108)">
+      <rect width="10" height="10" rx="2" fill="#89e051"/>
+      <text x="16" y="9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" fill="#d1d9e0">Shell</text>
+      <text x="210" y="9" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" font-weight="600" fill="#7d8895">6%</text>
+    </g>
+    <g transform="translate(140, 130)">
+      <rect width="10" height="10" rx="2" fill="#7d8895"/>
+      <text x="16" y="9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="12" fill="#d1d9e0">Other</text>
+      <text x="210" y="9" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+            font-size="11" font-weight="600" fill="#7d8895">4%</text>
+    </g>
+    </g>
+  </g>
+</svg>
