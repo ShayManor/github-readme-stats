@@ -45,6 +45,17 @@ def test_enrollments_daily_counter(tmp_dbs):
     assert dbmod.enrollments_today() == 2
 
 
+def test_enrollment_rank_is_case_insensitive(tmp_dbs):
+    """GitHub returns logins with original casing ("ShayManor") but the users
+    table stores them lowercased. Without normalization the founder-tag rule
+    silently misses everyone whose login has capitals."""
+    dbmod.enroll("shaymanor", {"theme": "dark"})
+    # Mixed / upper case must find the same row as the lowercased insert.
+    assert dbmod.enrollment_rank("ShayManor") is not None
+    assert dbmod.enrollment_rank("SHAYMANOR") == dbmod.enrollment_rank("shaymanor")
+    assert dbmod.enrollment_rank("missing") is None
+
+
 def test_update_settings_changes_hash(tmp_dbs):
     dbmod.enroll("alice", {"theme": "dark"})
     h_before = dbmod.get_settings("alice")["settings_hash"]

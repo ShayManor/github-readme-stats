@@ -197,9 +197,17 @@ def enrollments_today() -> int:
 
 def enrollment_rank(username: str) -> Optional[int]:
     """1-based position in overall enrollment order by enrolled_at. Used by
-    tag rules that reward early users (e.g. the 'founder' tag)."""
+    tag rules that reward early users (e.g. the 'founder' tag).
+
+    Usernames are persisted lowercased by `enroll()`, but callers may pass the
+    GitHub-returned login (which preserves the original casing). Normalize
+    here so a mixed-case lookup doesn't silently miss the row.
+    """
+    if not username:
+        return None
+    key = username.lower()
     with _settings_conn() as c:
-        row = c.execute("SELECT enrolled_at FROM users WHERE username=?", (username,)).fetchone()
+        row = c.execute("SELECT enrolled_at FROM users WHERE username=?", (key,)).fetchone()
         if row is None:
             return None
         return c.execute(

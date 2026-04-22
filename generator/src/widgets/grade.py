@@ -67,7 +67,10 @@ def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dic
 
     radius = 36
     circumference = 2 * math.pi * radius
-    offset = circumference * (1 - score / 100)
+    # S-tier grades get a fully closed ring regardless of exact score — the
+    # letter "S" itself carries the "top of the scale" meaning, so the visual
+    # should match. S+, S++ share the full circle.
+    offset = 0 if base == "S" else circumference * (1 - score / 100)
     grade_font = 30 if len(data.grade) <= 2 else 22
 
     # Stats row with icons
