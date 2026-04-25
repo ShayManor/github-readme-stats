@@ -13,9 +13,10 @@ def tmp_dbs(monkeypatch):
         yield d
 
 
-def test_process_one_stores_widget_data_without_rendering_svg(tmp_dbs):
-    """Phase 1 worker only hydrates widget_data; SVGs are rendered by the
-    /generate endpoint."""
+def test_process_one_stores_widget_data_and_renders_svg(tmp_dbs):
+    """The cron-driven worker must hydrate widget_data AND render SVGs so
+    embedded widgets stay fresh as the fetcher rotates the payload — not
+    just when the user clicks Generate."""
     dbmod.enroll("alice", {"theme": "dark", "enabled": ["grade"]})
     fake_payload = {"user": {"login": "alice"}, "repos": [], "events": [],
                     "commits": [], "total_commits": 0, "recent_commits": 0,
@@ -23,13 +24,14 @@ def test_process_one_stores_widget_data_without_rendering_svg(tmp_dbs):
     fake_data = {"grade": {"grade": "A", "score": 80, "stats": {}, "tags": [], "breakdown": {}}}
     with patch("src.worker.fetcher_client.get_data",
                return_value={"data": fake_payload, "payload_hash": "h1"}), \
-         patch("src.worker._compute_widget_data", return_value=fake_data):
+         patch("src.worker._compute_widget_data", return_value=fake_data), \
+         patch("src.worker._render_widgets",
+               return_value={"composite": "<svg>c</svg>", "grade": "<svg>g</svg>"}):
         worker.process_one()
-    # Widget data is stored for the client-side preview.
     row = dbmod.get_current_widget_data("alice")
     assert row is not None and row["data"] == fake_data
-    # SVGs are NOT rendered yet — /generate hasn't been called.
-    assert dbmod.get_current_widget("alice", "composite") is None
+    assert dbmod.get_current_widget("alice", "composite") == "<svg>c</svg>"
+    assert dbmod.get_current_widget("alice", "grade") == "<svg>g</svg>"
 
 
 def test_render_widgets_now_produces_svg(tmp_dbs):
@@ -104,6 +106,48 @@ def test_process_one_persists_streak(tmp_dbs):
     assert row["current_streak"] == 3
     assert row["max_streak"] == 3
     assert row["last_active_date"] == today.isoformat()
+
+
+def test_process_one_refreshes_streak_svg_when_payload_changes(tmp_dbs):
+    """Regression: the streak SVG must reflect the latest payload after the
+    cron-driven worker runs, even when settings_hash hasn't changed. The bug
+    was that process_one only updated widget_data and left the SVG frozen at
+    whatever the last /generate call rendered, so streak counters stayed
+    stuck for days."""
+    from datetime import date, timedelta
+
+    today = date.today()
+    dbmod.enroll("alice", {"theme": "dark", "enabled": ["streaks"]})
+
+    # Day 1: 1 day of activity → streak SVG renders "1".
+    payload_v1 = {
+        "user": {"login": "alice"}, "repos": [], "events": [],
+        "commits": [{"date": today.isoformat(), "count": 1}],
+        "total_commits": 1, "recent_commits": 1, "total_prs": 0,
+        "collaborators_data": [], "avatar_b64": "",
+    }
+    with patch("src.worker.fetcher_client.get_data",
+               return_value={"data": payload_v1, "payload_hash": "h1"}):
+        worker.process_one()
+    svg_v1 = dbmod.get_current_widget("alice", "streaks")
+    assert svg_v1 is not None and ">1<" in svg_v1
+
+    # Day 2: 2 days of activity → enqueue a fresh job, re-run worker.
+    dbmod.enqueue_build("alice")
+    payload_v2 = {
+        "user": {"login": "alice"}, "repos": [], "events": [],
+        "commits": [{"date": (today - timedelta(days=i)).isoformat(), "count": 1}
+                    for i in range(2)],
+        "total_commits": 2, "recent_commits": 2, "total_prs": 0,
+        "collaborators_data": [], "avatar_b64": "",
+    }
+    with patch("src.worker.fetcher_client.get_data",
+               return_value={"data": payload_v2, "payload_hash": "h2"}):
+        worker.process_one()
+    svg_v2 = dbmod.get_current_widget("alice", "streaks")
+    assert svg_v2 is not None
+    assert ">2<" in svg_v2, "streak SVG should reflect the new 2-day streak"
+    assert svg_v1 != svg_v2, "SVG must change when payload changes"
 
 
 def test_process_one_merges_stored_max(tmp_dbs):

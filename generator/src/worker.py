@@ -1,15 +1,11 @@
-"""Prefetch worker. Pulls pending jobs and populates widget data.
+"""Prefetch worker. Pulls pending jobs, populates widget data, renders SVGs.
 
-Two-phase pipeline:
-  * Phase 1 (this module): on enroll/settings-change, fetch the raw GitHub
-    payload from the fetcher and compute widget data for the client-side
-    Workshop preview. No SVG rendering.
-  * Phase 2 (render_widgets_now, called from the API's Generate endpoint):
-    synchronously render composite SVG from the cached raw + current
-    settings and persist to widgets.db.
-
-This split keeps the fetcher hot while the user edits settings and defers
-expensive SVG composition until the user clicks Generate.
+Each job (from enroll/settings-change/cron-detected payload change) goes
+through two steps in one pass: compute the widget_data dict for the client-
+side Workshop preview, then render and persist the composite + per-widget
+SVGs so embedded README widgets stay fresh as the underlying GitHub data
+rotates. The /generate endpoint reuses the same render path for on-demand
+re-renders triggered by the Generate button.
 
 Run as its own container: CMD python -m src.worker
 """
@@ -52,6 +48,19 @@ def _compute_widget_data(payload: dict, settings: dict, username: str) -> dict:
     }
 
 
+def _render_and_persist(username: str, payload: dict, settings: dict, settings_hash: str) -> None:
+    """Render SVGs from the payload and persist to widgets.db. Used by the
+    cron-driven worker so embedded widgets keep ticking forward (streak
+    counter, etc.) as the fetcher refreshes the underlying data — without
+    waiting for the user to manually click Generate."""
+    widgets = _render_widgets(username, payload, settings)
+    db.put_widgets(username, settings_hash, widgets)
+    cache.Cache().delete(
+        f"widget:composite:{username}",
+        *[f"widget:{n}:{username}" for n in widgets],
+    )
+
+
 def _render_widgets(username: str, payload: dict, settings: dict) -> dict[str, str]:
     enabled = settings.get("enabled") or config.ENABLED_WIDGETS
     order = settings.get("widget_order") or config.WIDGET_ORDER
@@ -86,7 +95,10 @@ def _render_widgets(username: str, payload: dict, settings: dict) -> dict[str, s
 
 
 def process_one() -> bool:
-    """Phase 1: claim a pending job and populate widget data (no SVG)."""
+    """Claim a pending job: populate widget_data AND render SVGs. The render
+    step is what keeps embedded README widgets fresh as the fetcher rotates
+    payloads — without it, SVGs would only ever update when the user clicks
+    Generate, which is why the streak counter previously appeared frozen."""
     job = db.claim_next_job()
     if job is None:
         return False
@@ -106,13 +118,16 @@ def process_one() -> bool:
             db.fail_job(job["id"], "settings missing", retry=False)
             return True
 
-        widget_data = _compute_widget_data(payload, settings_row["settings"], username)
-        db.put_widget_data(username, settings_row["settings_hash"], widget_data)
-        db.point_current_widget(username, settings_row["settings_hash"])
+        settings = settings_row["settings"]
+        settings_hash = settings_row["settings_hash"]
+        widget_data = _compute_widget_data(payload, settings, username)
+        db.put_widget_data(username, settings_hash, widget_data)
+        _render_and_persist(username, payload, settings, settings_hash)
+        db.point_current_widget(username, settings_hash)
         db.set_last_fetcher_hash(username, result.get("payload_hash", ""))
         db.lru_trim(username, config.WIDGET_LRU_PER_USER)
         db.complete_job(job["id"])
-        log.info("prefetched data for %s", username)
+        log.info("prefetched + rendered widgets for %s", username)
         return True
     except Exception as e:
         retry = job["attempts"] < MAX_ATTEMPTS
