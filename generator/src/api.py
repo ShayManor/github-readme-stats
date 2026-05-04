@@ -14,6 +14,7 @@ Two-phase pipeline:
   * POST /api/<u>/generate synchronously renders and persists the composite
     SVG. This is what the user's "Generate" button calls.
 """
+import hmac
 import logging
 import os
 import time
@@ -70,6 +71,21 @@ def _kickoff_prefetch_async(username: str):
         # Pool was shut down (process exiting). Dropping the kickoff is
         # safe: the cron loop will pick the job up on its next tick.
         log.warning("prefetch pool shut down; skipping kickoff for %s", username)
+
+
+def _request_fetch_async(username: str) -> None:
+    """Ask the fetcher to start a background GitHub fetch for `username`.
+
+    Returns as soon as the fetcher acks (HTTP 202). The fetcher will POST
+    back to /internal/data-ready when the data lands in fetcher.db, which
+    is what enqueues the build job. Failures here are logged and dropped:
+    the generator's cron loop will see the user on its next tick and try
+    again, so a transient network blip can't permanently strand a signup.
+    """
+    try:
+        fetcher_client.start_fetch_async(username)
+    except Exception:
+        log.warning("fetch-async kickoff failed for %s", username, exc_info=True)
 
 
 # ---- Per-IP rate limiter -----------------------------------------------------
@@ -512,14 +528,20 @@ def auth_github_callback():
     session["gh_id"] = gh_id
     session["gh_avatar_url"] = avatar_url
 
-    # Implicit enrollment. Idempotent; refreshes github_avatar_url on return logins.
+    # Implicit enrollment. Idempotent; refreshes github_avatar_url on return
+    # logins. We deliberately do NOT enqueue a build job here — the build is
+    # added to the queue by /internal/data-ready when the fetcher finishes
+    # the GitHub fetch. Enqueuing earlier means the worker pops a job before
+    # the fetcher has data, blocking on a synchronous GitHub fetch that can
+    # easily exceed the worker's HTTP timeout.
     defaults = {
         "theme": "dark",
         "enabled": config.ENABLED_WIDGETS,
         "widget_order": config.WIDGET_ORDER,
     }
-    db.enroll(login, defaults, github_id=gh_id, github_avatar_url=avatar_url)
-    _kickoff_prefetch_async(login)
+    db.enroll(login, defaults, github_id=gh_id, github_avatar_url=avatar_url,
+              enqueue_build=False)
+    _request_fetch_async(login)
 
     return redirect(nxt)
 
@@ -527,6 +549,40 @@ def auth_github_callback():
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "service": "generator"})
+
+
+@app.route("/internal/data-ready", methods=["POST"])
+def internal_data_ready():
+    """Called by the fetcher when a /fetch-async background job finishes.
+
+    Token-protected by the same shared secret used for generator -> fetcher
+    calls. The body is `{username, payload_hash, ok}`. If the user is
+    enrolled, enqueue a build job; the worker picks it up on its next 0.5s
+    tick and the fetcher's data is already cached, so the build runs in
+    seconds. If the user is not enrolled here we silently ignore — the
+    fetcher might have been kicked off by some other path (cron, manual
+    refresh) and we don't want to leak a job for a stranger.
+    """
+    token = request.headers.get("X-Internal-Token", "")
+    if not config.FETCHER_INTERNAL_TOKEN or not hmac.compare_digest(
+        token, config.FETCHER_INTERNAL_TOKEN
+    ):
+        return jsonify({"error": "unauthorized"}), 401
+    body = request.get_json(silent=True) or {}
+    username = body.get("username")
+    if not isinstance(username, str) or not is_valid_username(username):
+        return jsonify({"error": "invalid_username"}), 400
+    username = username.lower()
+    if db.get_settings(username) is None:
+        return jsonify({"ignored": True, "reason": "not_enrolled"}), 200
+    if not body.get("ok", True):
+        # The fetch failed (network / GitHub 5xx). No point queueing a
+        # build that would just fail too. The cron loop will retry the
+        # fetch on its next tick.
+        return jsonify({"ignored": True, "reason": "fetch_failed"}), 200
+    job_id = db.enqueue_build(username)
+    log.info("enqueued build %d for %s after fetch completion", job_id, username)
+    return jsonify({"queued": True, "job_id": job_id}), 200
 
 
 @app.route("/api/<username>", methods=["GET"])

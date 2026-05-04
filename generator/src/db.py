@@ -149,13 +149,19 @@ def settings_hash(settings: dict) -> str:
 
 def enroll(username: str, defaults: dict,
            github_id: int | None = None,
-           github_avatar_url: str | None = None) -> dict:
-    """Insert a settings row if missing, bump the daily counter, enqueue a build.
+           github_avatar_url: str | None = None,
+           enqueue_build: bool = True) -> dict:
+    """Insert a settings row if missing, bump the daily counter, optionally
+    enqueue a build.
 
-    Idempotent: calling again for an existing user refreshes github_avatar_url
-    (so login keeps the avatar fresh) and enqueues a rebuild. Always returns
-    {"job_id": int}. No token is returned — auth is handled by the signed
-    session cookie.
+    `enqueue_build=False` is used by the OAuth callback so the build job is
+    only added to the queue *after* the fetcher has actually fetched the
+    user (via the /internal/data-ready callback). Without this, the worker
+    would pop a build job for a user the fetcher hasn't seen yet and either
+    block on a synchronous GitHub fetch or retry-fail until cron.
+
+    Idempotent: calling again for an existing user refreshes
+    github_avatar_url. Returns {"job_id": int|None}.
     """
     sh = settings_hash(defaults)
     now = _now()
@@ -180,13 +186,16 @@ def enroll(username: str, defaults: dict,
                    ON CONFLICT(day) DO UPDATE SET count = count + 1""",
                 (_today(),),
             )
-        cur = c.execute(
-            """INSERT INTO jobs(kind, username, status, created_at, updated_at)
-               VALUES ('build', ?, 'pending', ?, ?)""",
-            (username, now, now),
-        )
+        job_id: int | None = None
+        if enqueue_build:
+            cur = c.execute(
+                """INSERT INTO jobs(kind, username, status, created_at, updated_at)
+                   VALUES ('build', ?, 'pending', ?, ?)""",
+                (username, now, now),
+            )
+            job_id = cur.lastrowid
         c.commit()
-        return {"job_id": cur.lastrowid}
+        return {"job_id": job_id}
 
 
 def enrollments_today() -> int:

@@ -31,6 +31,17 @@ def test_enroll_twice_noops(tmp_dbs):
     assert r1["job_id"] > 0 and r2["job_id"] > 0
 
 
+def test_enroll_without_build_skips_job(tmp_dbs):
+    """OAuth callback uses this so the build job is only added once the
+    fetcher has actually fetched (via /internal/data-ready). Otherwise the
+    worker pops a job for a user with no fetcher data yet."""
+    r = dbmod.enroll("alice", {"theme": "dark"}, enqueue_build=False)
+    assert r["job_id"] is None
+    assert dbmod.pending_job_count() == 0
+    # The user row itself was still created so callbacks can find them.
+    assert dbmod.get_settings("alice") is not None
+
+
 def test_enroll_with_github_profile(tmp_dbs):
     dbmod.enroll("alice", {"theme": "dark"}, github_id=1, github_avatar_url="https://x/a.png")
     with dbmod._settings_conn() as c:

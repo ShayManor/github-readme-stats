@@ -338,8 +338,9 @@ class DirectAPISource:
         created_year = int(created_at[:4])
         current_year = datetime.now().year
 
-        # Fetch year by year
-        total_contributions = 0
+        # Fetch year by year, in parallel. Sequentially this was 1 request
+        # per year of account age (~7-10 calls for typical accounts), each
+        # ~1s — easily a 10s wall-clock contributor on its own.
         print(f"  Fetching contributions from {created_year} to {current_year}...")
         year_query = """
         query($login: String!, $from: DateTime!, $to: DateTime!) {
@@ -350,7 +351,8 @@ class DirectAPISource:
           }
         }
         """
-        for year in range(created_year, current_year + 1):
+
+        def _fetch_year(year: int) -> tuple[int, int]:
             year_resp = requests.post(
                 'https://api.github.com/graphql',
                 json={
@@ -364,17 +366,22 @@ class DirectAPISource:
                 headers=headers,
                 timeout=config.API_TIMEOUT,
             )
-
-            if year_resp.ok:
-                year_data = year_resp.json()
-                if 'data' in year_data and year_data['data'].get('user'):
-                    year_contributions = year_data['data']['user']['contributionsCollection']['contributionCalendar']['totalContributions']
-                    total_contributions += year_contributions
-                    print(f"    {year}: {year_contributions:,} contributions")
-                else:
-                    print(f"    {year}: Error - {year_data}")
-            else:
+            if not year_resp.ok:
                 print(f"    {year}: HTTP {year_resp.status_code}")
+                return year, 0
+            year_data = year_resp.json()
+            if 'data' in year_data and year_data['data'].get('user'):
+                n = year_data['data']['user']['contributionsCollection']['contributionCalendar']['totalContributions']
+                return year, n
+            print(f"    {year}: Error - {year_data}")
+            return year, 0
+
+        years = list(range(created_year, current_year + 1))
+        total_contributions = 0
+        with ThreadPoolExecutor(max_workers=min(10, len(years) or 1)) as pool:
+            for year, n in sorted(pool.map(_fetch_year, years)):
+                total_contributions += n
+                print(f"    {year}: {n:,} contributions")
 
         print(f"  GraphQL API found {total_contributions:,} contributions (all-time)")
         return total_contributions
@@ -729,14 +736,33 @@ def _fetch_collaborators_data(
     qualifying = qualifying[:config.COLLABORATOR_TOP_REPOS]
     print(f"  Scoring collaborators across {len(qualifying)} qualifying repos")
 
-    # Step 3+4: fetch contributors and score
+    # Step 3: fetch contributors for all qualifying repos in parallel.
+    # The per-repo REST call is ~300-500ms; sequentially this dominated the
+    # whole fetch (30 repos × ~0.5s ≈ 15s). Fan out with the same pool size
+    # used for languages — GitHub's secondary rate limit tolerates this fine.
+    contributors_by_repo: dict[str, list] = {}
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = {
+            pool.submit(source.fetch_repo_contributors, r["full_name"], 1): r["full_name"]
+            for r in qualifying
+        }
+        for fut in as_completed(futures):
+            full_name = futures[fut]
+            try:
+                contributors_by_repo[full_name] = fut.result() or []
+            except Exception as e:
+                print(f"    failed to fetch contributors for {full_name}: {e}")
+                contributors_by_repo[full_name] = []
+
+    # Step 4: score sequentially (cheap, in-memory) preserving the original
+    # `qualifying` order so deterministic-output tests still pass.
     collab_stats: dict = {}
     for r in qualifying:
         full_name = r["full_name"]
         user_commits = r["user_commits"]
         boost = config.OWNER_BOOST if r["is_owner"] else 1.0
 
-        contributors = source.fetch_repo_contributors(full_name, min_commits=1)
+        contributors = contributors_by_repo.get(full_name, [])
         # Drop huge OSS projects
         if len(contributors) >= config.COLLABORATOR_MAX_REPO_SIZE:
             print(f"    skipping {full_name}: too many contributors ({len(contributors)})")

@@ -10,6 +10,8 @@ def client(monkeypatch):
     # No-op the kickoff so tests don't spawn background threads that
     # would try to reach the (unmocked) fetcher and race tempdir teardown.
     monkeypatch.setattr(apimod, "_kickoff_prefetch_async", lambda *_a, **_kw: None)
+    # Same reason for the new async-fetch hook used by the OAuth callback.
+    monkeypatch.setattr(apimod, "_request_fetch_async", lambda *_a, **_kw: None)
     with tempfile.TemporaryDirectory() as d:
         monkeypatch.setattr(dbmod, "SETTINGS_DB_PATH", os.path.join(d, "s.db"))
         monkeypatch.setattr(dbmod, "WIDGETS_DB_PATH", os.path.join(d, "w.db"))
@@ -302,6 +304,55 @@ def test_enroll_endpoint_is_gone(client):
     r = client.post("/api/enroll", json={"username": "alice"},
                     headers={"Origin": "https://gh-stats.com"})
     assert r.status_code == 405
+
+
+# ---- POST /internal/data-ready: callback from fetcher when an async fetch lands ----
+
+
+def test_data_ready_requires_internal_token(client, monkeypatch):
+    monkeypatch.setattr(cfg, "FETCHER_INTERNAL_TOKEN", "secret")
+    r = client.post("/internal/data-ready", json={"username": "alice"})
+    assert r.status_code == 401
+
+
+def test_data_ready_enqueues_build_for_enrolled_user(client, monkeypatch):
+    """The whole point of the async path: the build job appears in the queue
+    after the fetcher has stored data, not before. Enrolling a user no
+    longer adds a job, so /data-ready is the only thing that does."""
+    monkeypatch.setattr(cfg, "FETCHER_INTERNAL_TOKEN", "secret")
+    dbmod.enroll("alice", {"theme": "dark"}, enqueue_build=False)
+    assert dbmod.pending_job_count() == 0
+
+    r = client.post("/internal/data-ready",
+                    headers={"X-Internal-Token": "secret"},
+                    json={"username": "alice", "payload_hash": "h1", "ok": True})
+    assert r.status_code == 200
+    assert r.get_json()["queued"] is True
+    assert dbmod.pending_job_count() == 1
+
+
+def test_data_ready_ignores_unknown_user(client, monkeypatch):
+    """If we get a callback for someone who hasn't enrolled here we must not
+    create a job — the fetcher might be shared or the enrollment might
+    have been deleted in between."""
+    monkeypatch.setattr(cfg, "FETCHER_INTERNAL_TOKEN", "secret")
+    r = client.post("/internal/data-ready",
+                    headers={"X-Internal-Token": "secret"},
+                    json={"username": "stranger", "payload_hash": "h1", "ok": True})
+    assert r.status_code == 200
+    assert r.get_json()["ignored"] is True
+    assert dbmod.pending_job_count() == 0
+
+
+def test_data_ready_does_not_enqueue_on_failed_fetch(client, monkeypatch):
+    monkeypatch.setattr(cfg, "FETCHER_INTERNAL_TOKEN", "secret")
+    dbmod.enroll("alice", {"theme": "dark"}, enqueue_build=False)
+    r = client.post("/internal/data-ready",
+                    headers={"X-Internal-Token": "secret"},
+                    json={"username": "alice", "payload_hash": "", "ok": False})
+    assert r.status_code == 200
+    assert r.get_json()["ignored"] is True
+    assert dbmod.pending_job_count() == 0
 
 
 def test_query_override_triggers_adhoc_render_without_persisting(client):

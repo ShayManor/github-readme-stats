@@ -2,7 +2,9 @@
 import hmac
 import logging
 import re
+import threading
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, jsonify, request, Response
 from functools import wraps
 
@@ -10,6 +12,22 @@ from . import config, db, github
 
 app = Flask(__name__)
 log = logging.getLogger("fetcher.api")
+
+# Background pool for /fetch-async. The fetch routinely takes 10-20s of
+# wall clock even after parallelization, which is too long to hold an HTTP
+# request open from the generator (it would block the worker on its hot
+# path). Submitting to this pool lets us return 202 immediately and call
+# the generator back when the fetch finishes.
+_BG_POOL = ThreadPoolExecutor(
+    max_workers=max(1, config.ASYNC_FETCH_WORKERS),
+    thread_name_prefix="fetch-bg",
+)
+# Per-process in-flight set. If two callers ask us to fetch the same user
+# while the first fetch is still running, we ack the second one without
+# starting a duplicate GitHub call. Per-process only — fine for v1's single
+# fetcher container; a multi-replica deploy would need a distributed lock.
+_INFLIGHT: set[str] = set()
+_INFLIGHT_LOCK = threading.Lock()
 
 # Must stay in sync with github.py's _USERNAME_RE. Trust boundary: the
 # fetcher is called only by the generator over the internal network, but
@@ -82,6 +100,77 @@ def force_fetch():
     old_hash = old["payload_hash"] if old else None
     new_hash = db.upsert_user(username, data)
     return jsonify({"stored": True, "payload_hash": new_hash, "changed": old_hash != new_hash})
+
+
+def _bg_fetch(username: str) -> None:
+    """Background fetch + generator callback. Runs on _BG_POOL.
+
+    Always notifies the generator on completion (including not_found and
+    failure cases) so the generator can decide whether to enqueue a build,
+    persist a not_found marker, or do nothing. Without the callback the
+    generator would have to poll, which is exactly the design we're
+    removing — the worker used to block on the synchronous /data call and
+    time out on long fetches.
+    """
+    try:
+        try:
+            data = github.fetch_github_data(username, token=config.GITHUB_PAT)
+            if _is_github_not_found(data):
+                data = {"error": "not_found"}
+            payload_hash = db.upsert_user(username, data)
+            ok = True
+        except Exception:
+            log.exception("background fetch failed for %s", username)
+            payload_hash = ""
+            ok = False
+        _notify_generator_data_ready(username, payload_hash, ok)
+    finally:
+        with _INFLIGHT_LOCK:
+            _INFLIGHT.discard(username)
+
+
+def _notify_generator_data_ready(username: str, payload_hash: str, ok: bool) -> None:
+    if not config.GENERATOR_URL or not config.INTERNAL_TOKEN:
+        return
+    try:
+        requests.post(
+            f"{config.GENERATOR_URL}/internal/data-ready",
+            headers={"X-Internal-Token": config.INTERNAL_TOKEN},
+            json={"username": username, "payload_hash": payload_hash, "ok": ok},
+            timeout=5,
+        )
+    except Exception:
+        log.warning("data-ready callback to generator failed for %s", username, exc_info=True)
+
+
+@app.route("/fetch-async", methods=["POST"])
+@require_internal_token
+def fetch_async():
+    """Kick off a background GitHub fetch and return immediately.
+
+    The generator calls this on enrollment so the user-perceived latency
+    isn't bounded by GitHub's response time + the generator's HTTP
+    timeout. When the fetch completes the fetcher posts back to
+    /internal/data-ready on the generator, which is what enqueues the
+    build job.
+    """
+    body = request.get_json(silent=True) or {}
+    username = body.get("username")
+    if not _valid_username(username):
+        return jsonify({"error": "invalid_username"}), 400
+    with _INFLIGHT_LOCK:
+        if username in _INFLIGHT:
+            return jsonify({"queued": True, "already_inflight": True}), 202
+        _INFLIGHT.add(username)
+    try:
+        _BG_POOL.submit(_bg_fetch, username)
+    except RuntimeError:
+        # Pool was shut down (process exiting). Drop the in-flight marker
+        # so a retry after restart isn't blocked by a stale entry.
+        with _INFLIGHT_LOCK:
+            _INFLIGHT.discard(username)
+        return jsonify({"error": "shutting_down"}), 503
+    return jsonify({"queued": True}), 202
 
 
 @app.route("/avatar/<username>", methods=["GET"])
