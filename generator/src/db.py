@@ -357,6 +357,19 @@ def enqueue_build(username: str) -> int:
         return cur.lastrowid
 
 
+def has_open_build(username: str) -> bool:
+    """True if the user has a pending or running build job. Used by callers
+    that want enqueue idempotency without taking on the SQL themselves."""
+    with _settings_conn() as c:
+        row = c.execute(
+            """SELECT 1 FROM jobs
+               WHERE username=? AND kind='build' AND status IN ('pending', 'running')
+               LIMIT 1""",
+            (username,),
+        ).fetchone()
+        return row is not None
+
+
 def enqueue_build_all() -> int:
     """Enqueue a 'build' job for every enrolled user that doesn't already
     have one pending. Returns the number inserted. Idempotent — safe to

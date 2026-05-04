@@ -355,6 +355,25 @@ def test_data_ready_does_not_enqueue_on_failed_fetch(client, monkeypatch):
     assert dbmod.pending_job_count() == 0
 
 
+def test_data_ready_is_idempotent_when_build_already_pending(client, monkeypatch):
+    """The OAuth callback now enqueues a build directly so the worker can
+    make progress even if /internal/data-ready never arrives. When the
+    callback DOES arrive after that, it must not queue a second build."""
+    monkeypatch.setattr(cfg, "FETCHER_INTERNAL_TOKEN", "secret")
+    dbmod.enroll("alice", {"theme": "dark"})  # default enqueue_build=True
+    assert dbmod.pending_job_count() == 1
+
+    r = client.post("/internal/data-ready",
+                    headers={"X-Internal-Token": "secret"},
+                    json={"username": "alice", "payload_hash": "h1", "ok": True})
+    assert r.status_code == 200
+    assert r.get_json()["ignored"] is True
+    assert r.get_json()["reason"] == "already_queued"
+    # Critically, no second build job — the worker would just process the
+    # same widgets twice with no benefit.
+    assert dbmod.pending_job_count() == 1
+
+
 def test_query_override_triggers_adhoc_render_without_persisting(client):
     """GET /api/<u>?theme=... renders on-demand via worker.render_composite_adhoc
     and does not mutate the stored settings blob — this is the path visitors

@@ -528,20 +528,30 @@ def auth_github_callback():
     session["gh_id"] = gh_id
     session["gh_avatar_url"] = avatar_url
 
-    # Implicit enrollment. Idempotent; refreshes github_avatar_url on return
-    # logins. We deliberately do NOT enqueue a build job here — the build is
-    # added to the queue by /internal/data-ready when the fetcher finishes
-    # the GitHub fetch. Enqueuing earlier means the worker pops a job before
-    # the fetcher has data, blocking on a synchronous GitHub fetch that can
-    # easily exceed the worker's HTTP timeout.
+    # Implicit enrollment. Three converging paths kick off the build, all
+    # idempotent — the goal is that no single failure (fetcher unreachable,
+    # worker process not running, callback mis-delivered) can strand the
+    # signup waiting on cron's 15-min tick.
+    #   1) db.enroll() enqueues a 'build' job. Worker container or the
+    #      in-process kickoff pool will pop it; if the fetcher has no
+    #      data yet, /data auto-fetches synchronously (fast now that the
+    #      pipeline is parallelized end-to-end).
+    #   2) _request_fetch_async asks the fetcher to start a background
+    #      fetch immediately. When it finishes, it calls back to
+    #      /internal/data-ready, which is a no-op if a pending build for
+    #      this user already exists — it just shortens latency in the
+    #      common case.
+    #   3) _kickoff_prefetch_async runs process_one() in this process's
+    #      thread pool. This is the safety net for deployments that don't
+    #      run a separate worker process (gunicorn-only setups).
     defaults = {
         "theme": "dark",
         "enabled": config.ENABLED_WIDGETS,
         "widget_order": config.WIDGET_ORDER,
     }
-    db.enroll(login, defaults, github_id=gh_id, github_avatar_url=avatar_url,
-              enqueue_build=False)
+    db.enroll(login, defaults, github_id=gh_id, github_avatar_url=avatar_url)
     _request_fetch_async(login)
+    _kickoff_prefetch_async(login)
 
     return redirect(nxt)
 
@@ -580,6 +590,11 @@ def internal_data_ready():
         # build that would just fail too. The cron loop will retry the
         # fetch on its next tick.
         return jsonify({"ignored": True, "reason": "fetch_failed"}), 200
+    # Idempotent: the OAuth callback already enqueues a build directly so
+    # the worker can make progress even if this callback never arrives.
+    # If a build is already pending/running, don't queue a second one.
+    if db.has_open_build(username):
+        return jsonify({"ignored": True, "reason": "already_queued"}), 200
     job_id = db.enqueue_build(username)
     log.info("enqueued build %d for %s after fetch completion", job_id, username)
     return jsonify({"queued": True, "job_id": job_id}), 200
