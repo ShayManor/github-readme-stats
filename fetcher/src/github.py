@@ -139,21 +139,22 @@ class DirectAPISource:
     def fetch_repos(self, username: str) -> list:
         """Fetch user repositories (owned + contributed to)."""
         _assert_username(username)
-        # Fetch owned repos
-        owned = requests.get(
-            f"{self.base}/users/{username}/repos",
-            headers=self.headers,
-            params={"per_page": 100, "sort": "pushed", "type": "owner"},
-            timeout=config.API_TIMEOUT,
-        ).json()
 
-        # Fetch all repos (includes collabs, orgs)
-        all_repos = requests.get(
-            f"{self.base}/users/{username}/repos",
-            headers=self.headers,
-            params={"per_page": 100, "sort": "pushed", "type": "all"},
-            timeout=config.API_TIMEOUT,
-        ).json()
+        def _get(repo_type: str):
+            return requests.get(
+                f"{self.base}/users/{username}/repos",
+                headers=self.headers,
+                params={"per_page": 100, "sort": "pushed", "type": repo_type},
+                timeout=config.API_TIMEOUT,
+            ).json()
+
+        # The two REST calls are independent — fire them in parallel so the
+        # second isn't waiting on the first to come back.
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="fetch-repos") as pool:
+            fut_owned = pool.submit(_get, "owner")
+            fut_all = pool.submit(_get, "all")
+            owned = fut_owned.result()
+            all_repos = fut_all.result()
 
         # Combine and deduplicate
         repos = owned if isinstance(owned, list) else []
@@ -614,40 +615,44 @@ def fetch_github_data(
     # Use provided data source or default to direct API
     source = data_source or DirectAPISource(token)
 
-    # Fetch all data through the data source abstraction
-    user = source.fetch_user_data(username)
-    repos = source.fetch_repos(username)
-    events = source.fetch_events(username)
-    commits = source.fetch_commits(username)
-
-    # Attach per-repo language byte breakdown. Without this, the languages
-    # widget falls back to a primary-language repo-count tally, which
-    # heavily under-represents repos whose primary language has small files
-    # (e.g. HTML, Jupyter Notebook).
-    _enrich_repo_languages(repos, source)
-
-    # Fetch contribution counts (commits + PRs + issues + reviews)
-    print("  Fetching all-time contribution count...")
-    total_commits = source.fetch_commit_count(username, repos)
-
-    # Recent contributions (last 6 months)
     six_months_ago = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
-    print("  Fetching recent contribution count (last 6 months)...")
-    recent_commits = source.fetch_commit_count(username, repos, since_date=six_months_ago)
 
-    # Fetch PR count
-    print("  Fetching PR count...")
-    total_prs = source.fetch_pr_count(username)
+    # Stage 1: every fetch with no dependencies on another fetch's result
+    # runs in parallel. Previously these 8 calls ran one at a time, so the
+    # whole pipeline was wait-time × 8. Each is I/O-bound (a single HTTPS
+    # request to GitHub or a small GraphQL query), so threading is the
+    # right primitive. _fetch_collaborators_data internally calls
+    # fetch_user_commit_repos and ignores the `repos` arg, so it has no
+    # ordering dependency on fetch_repos — start them together.
+    with ThreadPoolExecutor(max_workers=10, thread_name_prefix="fetch-stage1") as pool:
+        fut_user = pool.submit(source.fetch_user_data, username)
+        fut_repos = pool.submit(source.fetch_repos, username)
+        fut_events = pool.submit(source.fetch_events, username)
+        fut_commits = pool.submit(source.fetch_commits, username)
+        fut_total = pool.submit(source.fetch_commit_count, username, [])
+        fut_recent = pool.submit(source.fetch_commit_count, username, [], six_months_ago)
+        fut_prs = pool.submit(source.fetch_pr_count, username)
+        fut_collab = pool.submit(_fetch_collaborators_data, username, [], source)
 
-    # Fetch collaborators from user's active repos
-    collaborators_data = _fetch_collaborators_data(
-        username, repos, source
-    )
+        user = fut_user.result()
+        repos = fut_repos.result()
+        events = fut_events.result()
+        commits = fut_commits.result()
+        total_commits = fut_total.result()
+        recent_commits = fut_recent.result()
+        total_prs = fut_prs.result()
+        collaborators_data = fut_collab.result()
 
-    # Fetch avatar
+    # Stage 2: avatar needs user.avatar_url, languages need the repos list.
+    # Both run in parallel against each other.
     avatar_b64 = ""
-    if user.get("avatar_url"):
-        avatar_b64 = source.fetch_avatar(user["avatar_url"])
+    avatar_url = user.get("avatar_url") if isinstance(user, dict) else None
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="fetch-stage2") as pool:
+        fut_lang = pool.submit(_enrich_repo_languages, repos, source)
+        fut_avatar = pool.submit(source.fetch_avatar, avatar_url) if avatar_url else None
+        fut_lang.result()
+        if fut_avatar is not None:
+            avatar_b64 = fut_avatar.result()
 
     return {
         "user": user,
