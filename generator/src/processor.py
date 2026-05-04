@@ -445,8 +445,13 @@ def compute_focus(github_data: dict, hidden_languages: list[str] = None) -> list
 
     focus_counts = defaultdict(float)
 
-    # Use top 30 most recently pushed repos
-    sorted_repos = sorted(repos, key=lambda r: r.get("pushed_at", ""), reverse=True)
+    # Use top 30 most recently pushed repos. `r.get("pushed_at", "")` is
+    # NOT enough — when GitHub returns the field as JSON null (archived /
+    # never-pushed repos, common in torvalds-sized accounts), .get returns
+    # None and the sort blows up with "'<' not supported between instances
+    # of 'str' and 'NoneType'". `or ""` coerces null-valued keys to the
+    # same empty-string fallback as missing keys.
+    sorted_repos = sorted(repos, key=lambda r: r.get("pushed_at") or "", reverse=True)
     active_repos = sorted_repos[:30]
 
     # Count languages in active repos (excluding hidden languages)

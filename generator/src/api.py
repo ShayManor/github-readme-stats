@@ -623,18 +623,35 @@ def get_widget_named(username: str, widget: str):
 def get_user_data(username: str):
     """Precomputed widget data for client-side SVG rendering.
 
-    Pure DB lookup — never touches the fetcher or runs compute on the hot
-    path. Enrollment is now OAuth-driven only.
+    Auto-enrolls visitors for users that haven't signed in themselves yet
+    (subject to ENROLLMENT_DAILY_CAP, same as the /?username=X shortcut).
+    Without this, typing someone else's username into the workshop's
+    search bar produced 'not_enrolled' forever — the user only got
+    enrolled if they personally went through OAuth, which makes the
+    public-preview UX dead-on-arrival.
     """
     if not is_valid_username(username):
         return jsonify({"error": "invalid_username"}), 400
+    username = username.lower()
     settings_row = db.get_settings(username)
     if settings_row is None:
-        # The user has never been enrolled. We don't know yet whether they
-        # exist on GitHub — only the fetcher can confirm that. Use a
-        # distinct status so the frontend doesn't surface a misleading
-        # "User not found" error for a user who simply hasn't signed in.
-        return jsonify({"status": "not_enrolled"}), 404
+        # Daily cap is the abuse backstop: a botnet typing random names
+        # can't burn through the GitHub PAT budget past this number.
+        if db.enrollments_today() >= config.ENROLLMENT_DAILY_CAP:
+            return jsonify({"status": "rate_limited"}), 429
+        defaults = {
+            "theme": "dark",
+            "enabled": config.ENABLED_WIDGETS,
+            "widget_order": config.WIDGET_ORDER,
+        }
+        # Same triple-converging kickoff as the OAuth callback: enqueue
+        # the build directly + ask the fetcher to start in the background
+        # + run process_one in the API's thread pool. Robust to any one
+        # of the three paths failing.
+        db.enroll(username, defaults)
+        _request_fetch_async(username)
+        _kickoff_prefetch_async(username)
+        return jsonify({"status": "building"}), 202
 
     db.touch_last_requested(username)
 

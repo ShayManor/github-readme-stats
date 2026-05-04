@@ -292,12 +292,25 @@ def test_refresh_without_session_is_401(client):
     assert r.status_code == 401
 
 
-def test_data_unknown_user_returns_404(client):
+def test_data_unknown_user_auto_enrolls_and_returns_building(client):
+    """Visitor auto-enroll: typing someone else's username into the workshop
+    search bar (which polls /data) must kick off the build pipeline, not
+    sit forever on a 404. Daily-cap protected by ENROLLMENT_DAILY_CAP."""
     r = client.get("/api/testuser/data")
-    assert r.status_code == 404
-    # Unknown-but-not-enrolled is distinct from confirmed-not-on-GitHub so
-    # the frontend can avoid a misleading "User not found" message.
-    assert r.get_json()["status"] == "not_enrolled"
+    assert r.status_code == 202
+    assert r.get_json()["status"] == "building"
+    # The user is now in `users` with a build queued, just like an OAuth
+    # signup or the /?username=X shortcut would have done.
+    assert dbmod.get_settings("testuser") is not None
+
+
+def test_data_unknown_user_when_cap_reached_returns_429(client, monkeypatch):
+    monkeypatch.setattr(cfg, "ENROLLMENT_DAILY_CAP", 0)
+    r = client.get("/api/testuser/data")
+    assert r.status_code == 429
+    assert r.get_json()["status"] == "rate_limited"
+    # No enrollment should have happened — cap is the abuse backstop.
+    assert dbmod.get_settings("testuser") is None
 
 
 def test_enroll_endpoint_is_gone(client):
