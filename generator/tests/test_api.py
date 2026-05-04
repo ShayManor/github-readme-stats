@@ -293,6 +293,9 @@ def test_refresh_without_session_is_401(client):
 def test_data_unknown_user_returns_404(client):
     r = client.get("/api/testuser/data")
     assert r.status_code == 404
+    # Unknown-but-not-enrolled is distinct from confirmed-not-on-GitHub so
+    # the frontend can avoid a misleading "User not found" message.
+    assert r.get_json()["status"] == "not_enrolled"
 
 
 def test_enroll_endpoint_is_gone(client):

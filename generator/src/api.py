@@ -559,7 +559,11 @@ def get_user_data(username: str):
         return jsonify({"error": "invalid_username"}), 400
     settings_row = db.get_settings(username)
     if settings_row is None:
-        return jsonify({"status": "not_found"}), 404
+        # The user has never been enrolled. We don't know yet whether they
+        # exist on GitHub — only the fetcher can confirm that. Use a
+        # distinct status so the frontend doesn't surface a misleading
+        # "User not found" error for a user who simply hasn't signed in.
+        return jsonify({"status": "not_enrolled"}), 404
 
     db.touch_last_requested(username)
 

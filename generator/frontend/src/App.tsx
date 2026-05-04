@@ -152,8 +152,16 @@ export default function App() {
           setFetchDone(true)
           return
         }
-        if (r.status === 404 || status === 'not_found') {
+        if (status === 'not_found') {
+          // Fetcher confirmed the user doesn't exist on GitHub.
           setFetchError('User not found')
+          setFetchDone(true)
+          return
+        }
+        if (r.status === 404) {
+          // 404 without status==='not_found' means the user simply isn't
+          // enrolled yet (no settings row). Keep the demo data on screen
+          // and stop polling — no error to display.
           setFetchDone(true)
           return
         }
