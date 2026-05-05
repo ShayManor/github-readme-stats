@@ -52,6 +52,21 @@ type Step = 'search' | 'workshop' | 'result'
 
 const POLL_INTERVAL_MS = 2000
 const POLL_TIMEOUT_MS = 120_000
+// ResultScreen poll: a bit slower than the workshop poll because each tick
+// re-fetches the full SVG, not a small JSON. 3s spacing is responsive
+// enough to feel near-instant when the widget lands.
+const RESULT_POLL_INTERVAL_MS = 3000
+// Give up after 3 minutes — long enough to cover even worst-case
+// first-time GitHub fetches; past that the user can hit "Check now".
+const RESULT_POLL_TIMEOUT_MS = 180_000
+
+type WidgetStatus = 'ready' | 'building' | 'not_found' | 'rate_limited'
+
+function readWidgetStatus(r: Response): WidgetStatus {
+  const raw = r.headers.get('X-Widget-Status')
+  if (raw === 'building' || raw === 'not_found' || raw === 'rate_limited') return raw
+  return 'ready'
+}
 
 export default function App() {
   const [me, setMe] = useState<Me>({ login: null })
@@ -71,9 +86,16 @@ export default function App() {
   // settings). For visitors it's /api/<u>?<query>, which round-trips their
   // Workshop edits without touching the owner's saved widget.
   const [embedUrl, setEmbedUrl] = useState<string>('')
+  // 'ready' once the backend has actually rendered the user's widget; until
+  // then the SVG returned by /api/<u> is the "Building @user's widget…"
+  // placeholder. We poll on this so the page upgrades itself from
+  // placeholder to real widget without the user having to refresh.
+  const [widgetStatus, setWidgetStatus] = useState<'ready' | 'building' | 'not_found' | 'rate_limited'>('ready')
   const pollTimer = useRef<number | null>(null)
   const pollStart = useRef<number>(0)
   const aborted = useRef(false)
+  const resultPollTimer = useRef<number | null>(null)
+  const resultPollStart = useRef<number>(0)
 
   const stopPolling = useCallback(() => {
     if (pollTimer.current != null) {
@@ -82,8 +104,52 @@ export default function App() {
     }
   }, [])
 
+  const stopResultPolling = useCallback(() => {
+    if (resultPollTimer.current != null) {
+      window.clearTimeout(resultPollTimer.current)
+      resultPollTimer.current = null
+    }
+  }, [])
+
+  // Pull and re-render the embed SVG once. Used both by the auto-poll loop
+  // (when the first /api/<u> returned a building placeholder) and by the
+  // manual "Check now" button on ResultScreen.
+  const refetchEmbed = useCallback(async () => {
+    if (!embedUrl) return
+    try {
+      const r = await fetch(`${embedUrl}${embedUrl.includes('?') ? '&' : '?'}t=${Date.now()}`)
+      if (!r.ok) return
+      const status = readWidgetStatus(r)
+      const text = await r.text()
+      setGeneratedSvg(text)
+      setWidgetStatus(status)
+    } catch {
+      /* transient — let the next poll tick try again */
+    }
+  }, [embedUrl])
+
   useEffect(() => stopPolling, [stopPolling])
+  useEffect(() => stopResultPolling, [stopResultPolling])
   useEffect(() => { fetchMe().then(setMe) }, [])
+
+  // Result-screen auto-refresh. Backend serves a "Building @user's widget…"
+  // placeholder SVG (with header X-Widget-Status: building) until the
+  // worker finishes the first build. Without this loop the user would
+  // stare at the placeholder until they manually reloaded.
+  useEffect(() => {
+    if (step !== 'result' || widgetStatus !== 'building' || !embedUrl) return
+    resultPollStart.current = Date.now()
+    const tick = async () => {
+      await refetchEmbed()
+      if (Date.now() - resultPollStart.current > RESULT_POLL_TIMEOUT_MS) {
+        stopResultPolling()
+        return
+      }
+      resultPollTimer.current = window.setTimeout(tick, RESULT_POLL_INTERVAL_MS)
+    }
+    resultPollTimer.current = window.setTimeout(tick, RESULT_POLL_INTERVAL_MS)
+    return stopResultPolling
+  }, [step, widgetStatus, embedUrl, refetchEmbed, stopResultPolling])
 
   const startFetch = useCallback((user: string) => {
     stopPolling()
@@ -199,6 +265,7 @@ export default function App() {
     setGenerating(true)
     setGeneratedSvg(null)
     setGenerateError(null)
+    setWidgetStatus('ready')
     const isOwner = !!me.login && me.login.toLowerCase() === username.toLowerCase()
     try {
       if (isOwner) {
@@ -249,6 +316,7 @@ export default function App() {
         }
         setGeneratedSvg(await svgRes.text())
         setEmbedUrl(cleanUrl)
+        setWidgetStatus(readWidgetStatus(svgRes))
       } else {
         // Visitor path: encode Workshop edits into a query string and hit
         // the same URL we'll hand the user for their README. No owner
@@ -268,6 +336,7 @@ export default function App() {
         }
         setGeneratedSvg(await svgRes.text())
         setEmbedUrl(url)
+        setWidgetStatus(readWidgetStatus(svgRes))
       }
     } catch (e) {
       console.warn('generate call failed:', e)
@@ -315,8 +384,10 @@ export default function App() {
           generatedSvg={generatedSvg}
           generateError={generateError}
           embedUrl={embedUrl}
+          widgetStatus={widgetStatus}
           onBack={handleBack}
           onRegenerate={handleGenerate}
+          onRefresh={refetchEmbed}
         />
       )}
     </div>

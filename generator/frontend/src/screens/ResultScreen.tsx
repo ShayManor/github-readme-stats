@@ -18,11 +18,17 @@ type Props = {
   // We display whichever URL was used to produce the SVG above, so the
   // snippet they copy matches what they're previewing.
   embedUrl: string
+  // 'building' means the SVG above is still the "Building @user's
+  // widget…" placeholder; the parent is auto-polling for the real one.
+  widgetStatus: 'ready' | 'building' | 'not_found' | 'rate_limited'
   onBack: () => void
   onRegenerate: () => void
+  // Manual refetch — same fetch the auto-poll runs, exposed as a button
+  // so the user has a way to nudge it if they want.
+  onRefresh: () => void
 }
 
-export function ResultScreen({ username, generating, generatedSvg, generateError, embedUrl, onBack, onRegenerate }: Props) {
+export function ResultScreen({ username, generating, generatedSvg, generateError, embedUrl, widgetStatus, onBack, onRegenerate, onRefresh }: Props) {
   const safeSvg = useMemo(() => (generatedSvg ? sanitizeSvg(generatedSvg) : ''), [generatedSvg])
   const [copied, setCopied] = useState(false)
   const fallbackUrl = `${window.location.origin}/api/${encodeURIComponent(username)}`
@@ -95,6 +101,18 @@ export function ResultScreen({ username, generating, generatedSvg, generateError
 
         {!generating && !generateError && safeSvg && (
           <>
+            {widgetStatus === 'building' && (
+              <div className="mt-6 flex items-center gap-2 text-xs text-gray-500">
+                <div className="w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin-slow" />
+                <span>Still building on the server — this page will update automatically when ready.</span>
+                <button
+                  onClick={onRefresh}
+                  className="ml-2 px-2 py-1 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                >
+                  Check now
+                </button>
+              </div>
+            )}
             <div className="w-full mt-6 rounded-2xl bg-white shadow-lg ring-1 ring-gray-200 p-6 flex justify-center">
               {/*
                 Force the inline SVG to scale up to the card width. The
