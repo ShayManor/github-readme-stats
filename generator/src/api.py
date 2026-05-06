@@ -618,6 +618,47 @@ def get_widget_named(username: str, widget: str):
     return _serve(username, widget_name=widget)
 
 
+@app.route("/api/top-langs", methods=["GET"])
+@rate_limited("read")
+def compat_top_langs():
+    """Compatibility shim for upstream anuraghazra/github-readme-stats URLs.
+
+    People copy `/api/top-langs?username=X&...` straight out of READMEs
+    that target the upstream Vercel-hosted service and just swap in
+    gh-stats.com. Without this route the request would fall through to
+    /api/<u> with username='top-langs', which is meaningless here.
+
+    Routing precedence: Flask matches the literal '/api/top-langs' before
+    the '/api/<username>' rule, so this can't shadow real users.
+
+    Upstream-only query params (layout, title_color, text_color,
+    bg_color, hide_border, langs_count, hide, etc.) are deliberately
+    ignored — themeing in this fork is per-user, configured in the
+    workshop, not per-URL. The intent is that the embedded image
+    *renders something coherent* instead of 'user not found'.
+    """
+    username = request.args.get("username", "")
+    if not isinstance(username, str) or not is_valid_username(username):
+        return jsonify({"error": "invalid_username"}), 400
+    username = username.lower()
+    # Same auto-enroll path as GET /api/<u>/data so a first-time visitor
+    # doesn't sit on a placeholder forever. Daily cap is the abuse
+    # backstop; without it a botnet hitting random ?username= values
+    # could exhaust the GitHub PAT budget.
+    if db.get_settings(username) is None:
+        if db.enrollments_today() >= config.ENROLLMENT_DAILY_CAP:
+            return _placeholder_response("rate_limited", username)
+        defaults = {
+            "theme": "dark",
+            "enabled": config.ENABLED_WIDGETS,
+            "widget_order": config.WIDGET_ORDER,
+        }
+        db.enroll(username, defaults)
+        _request_fetch_async(username)
+        _kickoff_prefetch_async(username)
+    return _serve(username, widget_name="languages")
+
+
 @app.route("/api/<username>/data", methods=["GET"])
 @rate_limited("read")
 def get_user_data(username: str):

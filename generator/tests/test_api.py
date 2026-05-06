@@ -313,6 +313,79 @@ def test_data_unknown_user_when_cap_reached_returns_429(client, monkeypatch):
     assert dbmod.get_settings("testuser") is None
 
 
+# ---- /api/top-langs compat shim for upstream github-readme-stats URLs ----
+
+
+def test_top_langs_requires_username_query_param(client):
+    r = client.get("/api/top-langs")
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "invalid_username"
+
+
+def test_top_langs_rejects_invalid_username(client):
+    r = client.get("/api/top-langs?username=../etc/passwd")
+    assert r.status_code == 400
+
+
+def test_top_langs_route_does_not_shadow_real_user_named_top(client):
+    """Sanity: Flask matches the literal '/api/top-langs' route before
+    falling through to '/api/<username>', but a user literally named
+    'top' should still resolve via the variable route."""
+    dbmod.enroll("top", {"theme": "dark"})
+    dbmod.put_widgets("top", "h1", {"composite": "<svg>top</svg>"})
+    dbmod.point_current_widget("top", "h1")
+    r = client.get("/api/top")
+    assert r.status_code == 200
+    assert b"top" in r.data
+
+
+def test_top_langs_serves_languages_widget_for_existing_user(client):
+    """The shim's job is to map upstream's URL shape to this fork's
+    languages widget. Cached SVG should come back unchanged."""
+    dbmod.enroll("alice", {"theme": "dark"})
+    dbmod.put_widgets("alice", "h1", {
+        "composite": "<svg>composite</svg>",
+        "languages": "<svg>langs</svg>",
+    })
+    dbmod.point_current_widget("alice", "h1")
+    r = client.get("/api/top-langs?username=alice")
+    assert r.status_code == 200
+    assert r.headers.get("Content-Type", "").startswith("image/svg")
+    assert b"langs" in r.data
+
+
+def test_top_langs_auto_enrolls_unknown_user(client):
+    """Visitor copy-pasting an upstream-style URL for a user we've never
+    seen should kick off the build pipeline, same as /data does."""
+    r = client.get("/api/top-langs?username=newcomer")
+    assert r.status_code == 200  # placeholder SVG
+    assert dbmod.get_settings("newcomer") is not None
+
+
+def test_top_langs_when_cap_reached_returns_placeholder(client, monkeypatch):
+    monkeypatch.setattr(cfg, "ENROLLMENT_DAILY_CAP", 0)
+    r = client.get("/api/top-langs?username=newcomer")
+    assert r.status_code == 200
+    # Rate-limited placeholder, not enrolled.
+    assert dbmod.get_settings("newcomer") is None
+
+
+def test_top_langs_ignores_upstream_specific_query_params(client):
+    """Upstream's layout/title_color/hide/langs_count/etc. params have
+    no equivalent in this fork. The shim should not crash on them — it
+    should just serve the cached widget and ignore the noise."""
+    dbmod.enroll("alice", {"theme": "dark"})
+    dbmod.put_widgets("alice", "h1", {"languages": "<svg>langs</svg>"})
+    dbmod.point_current_widget("alice", "h1")
+    r = client.get(
+        "/api/top-langs?username=alice&layout=compact&hide_border=true"
+        "&title_color=58C4DD&text_color=58C4DD&bg_color=00000000"
+        "&langs_count=6&hide=html,css"
+    )
+    assert r.status_code == 200
+    assert b"langs" in r.data
+
+
 def test_enroll_endpoint_is_gone(client):
     r = client.post("/api/enroll", json={"username": "alice"},
                     headers={"Origin": "https://gh-stats.com"})
