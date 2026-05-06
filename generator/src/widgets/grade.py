@@ -128,7 +128,13 @@ def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dic
     stats_y = 100
     tags_y = stats_y + 54
     tag_padding = 18 if tags_h > 24 else 14
+    # Reserve space at the bottom for the "Generated with gh-stats"
+    # attribution. Matches the composite widget's footer convention so
+    # the standalone grade widget feels visually consistent when it's
+    # embedded on its own (the /api/<u>/grade.svg path).
+    footer_h = 16
     card_h = (tags_y + tags_h + tag_padding) if data.tags else (stats_y + 54)
+    card_h += footer_h
 
     strengths = _top_strengths(data.breakdown)
     strengths_line = f"Strong in {' · '.join(strengths)}" if strengths else ""
@@ -165,5 +171,13 @@ def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dic
     <g transform="translate(20, {tags_y})">
       {tags_svg}
     </g>'''
+
+    # Footer attribution. Positioned in the inner-svg coordinate space
+    # (card_wrapper passes title="" here, so inner is not vertically
+    # offset). 8px above the bottom edge mirrors the composite widget.
+    inner += f'''
+    <text x="190" y="{card_h - 8}" text-anchor="middle"
+          font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="9" fill="{t["text_secondary"]}" opacity="0.5">Generated with gh-stats</text>'''
 
     return card_wrapper(inner, 380, card_h, t, "")
