@@ -5,8 +5,22 @@ from ..themes import THEMES
 from ..utils import escape
 
 
+_ATTRIBUTION_RE = re.compile(
+    r'<text\b[^>]*\bdata-gh-attribution="1"[^>]*>[^<]*</text>',
+    re.DOTALL,
+)
+_ATTRIBUTION_H_RE = re.compile(r'\bdata-gh-h="(\d+)"')
+
+
 def _extract_inner(svg: str, widget_key: str) -> tuple[str, int]:
     """Extract the inner content from a widget SVG and rewrite IDs to be unique.
+
+    Also strips any per-widget "Generated with gh-stats" attribution text
+    (marked with data-gh-attribution="1") and shrinks the reported height
+    by data-gh-h so the composite doesn't reserve empty space for the
+    removed footer. The composite has its own attribution at the bottom
+    of the whole card; per-widget attributions are for the standalone
+    /api/<u>/<widget>.svg embed paths.
 
     Returns (inner_svg_content, height).
     """
@@ -30,6 +44,14 @@ def _extract_inner(svg: str, widget_key: str) -> tuple[str, int]:
     # Strip the outer <svg> and </svg> tags to get just the content
     inner = re.sub(r'<svg[^>]*>', '', inner, count=1)
     inner = re.sub(r'</svg>\s*$', '', inner)
+
+    # Strip any embedded attribution and reclaim its reserved height.
+    attr_match = _ATTRIBUTION_RE.search(inner)
+    if attr_match:
+        inner = inner.replace(attr_match.group(0), '', 1)
+        h_match = _ATTRIBUTION_H_RE.search(attr_match.group(0))
+        if h_match:
+            h -= int(h_match.group(1))
 
     return inner, h
 

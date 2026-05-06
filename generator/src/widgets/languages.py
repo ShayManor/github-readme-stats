@@ -95,5 +95,19 @@ def render_languages_widget(languages: list[LanguageData], theme_name: str = "da
       {legend}
     </g>'''
 
+    # Footer attribution. Marked with data-gh-attribution so composite.py
+    # can strip it (and reclaim the 16px) when inlining the widget into
+    # the larger composite — the composite has its own footer, showing
+    # both would be visually redundant. card_wrapper here passes
+    # title="Languages", which adds a 36px translate to inner. The 36 is
+    # already baked into the card height (rows_h + 36); the attribution
+    # adds another 16 on top, positioned 8px from the bottom of the card.
     rows_h = max(len(langs) * 22 + 40, 120)
-    return card_wrapper(inner, 380, rows_h + 36, t, "Languages")
+    footer_h = 16
+    card_h = rows_h + 36 + footer_h
+    inner += f'''
+    <text data-gh-attribution="1" data-gh-h="{footer_h}"
+          x="190" y="{card_h - 36 - 8}" text-anchor="middle"
+          font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+          font-size="9" fill="{t["text_secondary"]}" opacity="0.5">Generated with gh-stats</text>'''
+    return card_wrapper(inner, 380, card_h, t, "Languages")

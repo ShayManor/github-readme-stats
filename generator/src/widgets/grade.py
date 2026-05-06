@@ -172,11 +172,15 @@ def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dic
       {tags_svg}
     </g>'''
 
-    # Footer attribution. Positioned in the inner-svg coordinate space
-    # (card_wrapper passes title="" here, so inner is not vertically
-    # offset). 8px above the bottom edge mirrors the composite widget.
+    # Footer attribution. Marked with data-gh-attribution so composite.py
+    # can strip it (and reclaim the 16px) when this widget gets inlined
+    # — the composite has its own footer at the bottom of the whole
+    # card, so showing both would double-tag the same image.
+    # Positioned in the inner-svg coordinate space (card_wrapper passes
+    # title="" here, so inner is not vertically offset).
     inner += f'''
-    <text x="190" y="{card_h - 8}" text-anchor="middle"
+    <text data-gh-attribution="1" data-gh-h="{footer_h}"
+          x="190" y="{card_h - 8}" text-anchor="middle"
           font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
           font-size="9" fill="{t["text_secondary"]}" opacity="0.5">Generated with gh-stats</text>'''
 
