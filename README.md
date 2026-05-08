@@ -356,9 +356,3 @@ Recolor the impact line:
 ```md
 ![impact](https://gh-stats.com/api/YOUR_USERNAME/impact.svg?impact.line_color=%23a78bfa)
 ```
-
-Hide noisy languages:
-
-```md
-![langs](https://gh-stats.com/api/YOUR_USERNAME/languages.svg?hide=HTML,CSS,Makefile)
-```
