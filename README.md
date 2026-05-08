@@ -345,7 +345,6 @@ Embed two widgets side by side with an HTML table:
   <td><img src="https://gh-stats.com/api/YOUR_USERNAME/languages.svg" /></td>
 </tr></table>
 ```
-U=findme; docker exec ghstats-generator python -c "import sqlite3; s=sqlite3.connect('/app/data/settings.db'); w=sqlite3.connect('/app/data/widgets.db'); [s.execute(f'DELETE FROM {t} WHERE username=?', ('$U',)) for t in ('users','jobs','user_streaks')]; [w.execute(f'DELETE FROM {t} WHERE username=?', ('$U',)) for t in ('widgets','current_widget','widget_data')]; s.commit(); w.commit(); print('generator: removed', '$U')" && docker exec ghstats-fetcher python -c "import sqlite3; c=sqlite3.connect('/app/data/fetcher.db'); c.execute('DELETE FROM users WHERE username=?', ('$U',)); c.commit(); print('fetcher: removed', '$U')"
 Stack a custom composite with only three widgets:
 
 ```md
