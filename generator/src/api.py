@@ -414,6 +414,19 @@ def sanitize_settings(body: dict) -> dict:
     return out
 
 
+@app.route("/dev")
+@auth.require_basic_auth
+def dev_index():
+    """Gate the dashboard page itself so the browser pops the native
+    Basic-Auth prompt before any HTML loads. Without this, the SPA bundle
+    serves unauthenticated and the dashboard shell renders before the XHR
+    401 lands — defeating the auth wall."""
+    index = os.path.join(_STATIC_DIR, "index.html")
+    if os.path.isfile(index):
+        return send_from_directory(_STATIC_DIR, "index.html")
+    return jsonify({"error": "frontend not built"}), 503
+
+
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def spa(path: str):

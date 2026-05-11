@@ -624,3 +624,33 @@ def test_dev_latency_and_health(client, monkeypatch):
     for key in ("edge_cache_hit_rate", "fetcher_error_rate",
                 "events_dropped_24h"):
         assert key in body
+
+
+def test_dev_page_requires_basic_auth(client, monkeypatch):
+    """The /dev page itself must 401 without credentials so the browser pops
+    the native Basic-Auth prompt before any HTML loads. Without this gate
+    the SPA bundle serves unauthenticated and the dashboard shell renders
+    before the XHR 401 lands."""
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_USER", "admin")
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_PASSWORD", "pw")
+    r = client.get("/dev")
+    assert r.status_code == 401
+    assert r.headers.get("WWW-Authenticate", "").startswith("Basic")
+
+
+def test_dev_page_503_when_dashboard_disabled(client, monkeypatch):
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_USER", "")
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_PASSWORD", "")
+    r = client.get("/dev")
+    assert r.status_code == 503
+
+
+def test_dev_page_serves_html_with_good_creds(client, monkeypatch, tmp_path):
+    """With valid Basic credentials, /dev should return whatever index.html
+    contains (or 503 if the frontend isn't built — both branches mean we
+    passed the auth gate)."""
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_USER", "admin")
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_PASSWORD", "pw")
+    r = client.get("/dev", headers=_basic())
+    # 200 if the bundle is on disk, 503 otherwise — both prove auth passed.
+    assert r.status_code in (200, 503)
