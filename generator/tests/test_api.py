@@ -15,6 +15,7 @@ def client(monkeypatch):
     with tempfile.TemporaryDirectory() as d:
         monkeypatch.setattr(dbmod, "SETTINGS_DB_PATH", os.path.join(d, "s.db"))
         monkeypatch.setattr(dbmod, "WIDGETS_DB_PATH", os.path.join(d, "w.db"))
+        monkeypatch.setattr(dbmod, "ANALYTICS_DB_PATH", os.path.join(d, "a.db"))
         dbmod.init_dbs()
         # Configure OAuth fixture with allowed origins and insecure cookies for testing.
         monkeypatch.setattr(cfg, "ALLOWED_ORIGINS", ("https://gh-stats.com",))
@@ -536,3 +537,90 @@ def test_per_login_mutate_rate_limit(client, monkeypatch):
     # Third request should be rate-limited.
     r3 = client.patch("/api/alice/settings", json={}, headers=h)
     assert r3.status_code == 429
+
+
+def test_internal_analytics_events_requires_token(client, monkeypatch):
+    monkeypatch.setattr(cfg, "FETCHER_INTERNAL_TOKEN", "secret")
+    r = client.post("/internal/analytics/events", json={"events": []})
+    assert r.status_code == 401
+
+
+def test_internal_analytics_events_ingests(client, monkeypatch):
+    from src import analytics
+    monkeypatch.setattr(cfg, "FETCHER_INTERNAL_TOKEN", "secret")
+    analytics._reset_for_tests()
+    body = {
+        "events": [
+            {"ts": 1700000000, "service": "edge", "kind": "request",
+             "username": "alice", "endpoint": "/<u>", "widget": "composite",
+             "status": 200, "latency_ms": 12, "cache_hit": 1}
+        ]
+    }
+    r = client.post("/internal/analytics/events",
+                    headers={"X-Internal-Token": "secret"},
+                    json=body)
+    assert r.status_code == 200
+    assert r.get_json()["ingested"] == 1
+
+
+def _basic(user="admin", pw="pw"):
+    import base64
+    return {"Authorization": "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()}
+
+
+def test_dev_summary_requires_auth(client, monkeypatch):
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_USER", "admin")
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_PASSWORD", "pw")
+    r = client.get("/api/dev/summary")
+    assert r.status_code == 401
+
+
+def test_dev_summary_returns_shape(client, monkeypatch):
+    from src import analytics
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_USER", "admin")
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_PASSWORD", "pw")
+    analytics._reset_for_tests()
+    import time as _time
+    analytics.ingest_batch([
+        {"ts": int(_time.time()) - 60, "service": "edge", "kind": "request",
+         "username": "alice", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 11, "cache_hit": 1},
+    ])
+    r = client.get("/api/dev/summary", headers=_basic())
+    assert r.status_code == 200
+    body = r.get_json()
+    for key in ("requests_7d", "active_users_7d", "p50_ms", "p95_ms",
+                "renders_7d", "avg_render_ms", "daily_requests"):
+        assert key in body
+    assert len(body["daily_requests"]) == 7
+
+
+def test_dev_users_endpoint(client, monkeypatch):
+    from src import analytics
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_USER", "admin")
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_PASSWORD", "pw")
+    analytics._reset_for_tests()
+    import time as _time
+    analytics.ingest_batch([
+        {"ts": int(_time.time()) - 60, "service": "edge", "kind": "request",
+         "username": "alice", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 11, "cache_hit": 1},
+    ])
+    r = client.get("/api/dev/users", headers=_basic())
+    assert r.status_code == 200
+    rows = r.get_json()
+    assert any(u["username"] == "alice" for u in rows)
+
+
+def test_dev_latency_and_health(client, monkeypatch):
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_USER", "admin")
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_PASSWORD", "pw")
+    r = client.get("/api/dev/latency", headers=_basic())
+    assert r.status_code == 200
+    assert isinstance(r.get_json(), list)
+    r2 = client.get("/api/dev/health", headers=_basic())
+    assert r2.status_code == 200
+    body = r2.get_json()
+    for key in ("edge_cache_hit_rate", "fetcher_error_rate",
+                "events_dropped_24h"):
+        assert key in body

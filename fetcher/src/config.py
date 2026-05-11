@@ -30,3 +30,6 @@ DEEP_COLLAB_THRESHOLD = int(os.getenv("DEEP_COLLAB_THRESHOLD", "25"))
 # Commit-fetching caps
 COMMIT_MAX_REPOS = int(os.getenv("COMMIT_MAX_REPOS", "10"))
 COMMIT_PER_REPO = int(os.getenv("COMMIT_PER_REPO", "30"))
+
+ANALYTICS_FLUSH_SECONDS = int(os.getenv("ANALYTICS_FLUSH_SECONDS", "5"))
+ANALYTICS_QUEUE_MAX = int(os.getenv("ANALYTICS_QUEUE_MAX", "2000"))

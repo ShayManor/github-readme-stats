@@ -8,6 +8,7 @@ services:
     environment:
       GITHUB_PAT: ${GITHUB_PAT:?missing GITHUB_PAT}
       FETCHER_INTERNAL_TOKEN: ${FETCHER_INTERNAL_TOKEN:?missing FETCHER_INTERNAL_TOKEN}
+      GENERATOR_URL: http://generator:5002
     volumes:
       - ${HOME}/ghstats/data/fetcher:/app/data
     ports:
@@ -38,6 +39,8 @@ services:
       GENERATOR_SECRET_KEY: ${GENERATOR_SECRET_KEY:?missing GENERATOR_SECRET_KEY}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://gh-stats.com}
       BUILD_VERSION: ${IMAGE_TAG:-}
+      DEV_DASHBOARD_USER: ${DEV_DASHBOARD_USER:?missing DEV_DASHBOARD_USER}
+      DEV_DASHBOARD_PASSWORD: ${DEV_DASHBOARD_PASSWORD:?missing DEV_DASHBOARD_PASSWORD}
     volumes:
       - ${HOME}/ghstats/data/generator:/app/data
     ports:
@@ -79,6 +82,7 @@ services:
     restart: unless-stopped
     environment:
       GENERATOR_URL: http://generator:5002
+      FETCHER_INTERNAL_TOKEN: ${FETCHER_INTERNAL_TOKEN:?missing FETCHER_INTERNAL_TOKEN}
     ports:
       - "127.0.0.1:5003:5003"
     depends_on:

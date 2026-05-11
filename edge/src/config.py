@@ -14,3 +14,8 @@ UPSTREAM_TIMEOUT = int(os.getenv("EDGE_UPSTREAM_TIMEOUT", "10"))
 # default; tighten via env if a specific IP misbehaves.
 RATE_LIMIT_MAX    = int(os.getenv("EDGE_RATE_LIMIT_MAX", "3000"))
 RATE_LIMIT_WINDOW = int(os.getenv("EDGE_RATE_LIMIT_WINDOW", "60"))
+
+ANALYTICS_GENERATOR_URL = os.getenv("ANALYTICS_GENERATOR_URL", os.getenv("GENERATOR_URL", "http://localhost:5002"))
+ANALYTICS_INTERNAL_TOKEN = os.getenv("FETCHER_INTERNAL_TOKEN", "")
+ANALYTICS_FLUSH_SECONDS = int(os.getenv("ANALYTICS_FLUSH_SECONDS", "5"))
+ANALYTICS_QUEUE_MAX = int(os.getenv("ANALYTICS_QUEUE_MAX", "2000"))

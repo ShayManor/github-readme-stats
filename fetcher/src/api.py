@@ -3,15 +3,18 @@ import hmac
 import logging
 import re
 import threading
+import time
 import requests
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, jsonify, request, Response
 from functools import wraps
 
-from . import config, db, github
+from . import analytics, config, db, github
 
 app = Flask(__name__)
 log = logging.getLogger("fetcher.api")
+
+analytics.start_flush_thread()
 
 # Background pool for /fetch-async. The fetch routinely takes 10-20s of
 # wall clock even after parallelization, which is too long to hold an HTTP
@@ -63,13 +66,18 @@ def get_data(username: str):
     row = db.get_user(username)
     if row is None:
         # Auto-fetch path
+        t0 = time.monotonic()
         try:
             data = github.fetch_github_data(username, token=config.GITHUB_PAT)
         except Exception:
+            analytics.record_fetch(username, 502, int((time.monotonic() - t0) * 1000))
             log.exception("github fetch failed for %s", username)
             return jsonify({"error": "fetch_failed"}), 502
         if _is_github_not_found(data):
             data = {"error": "not_found"}
+            analytics.record_fetch(username, 404, int((time.monotonic() - t0) * 1000))
+        else:
+            analytics.record_fetch(username, 200, int((time.monotonic() - t0) * 1000))
         h = db.upsert_user(username, data)
         return jsonify({"data": data, "payload_hash": h, "fetched": True})
     return jsonify({
@@ -87,15 +95,20 @@ def force_fetch():
     username = body.get("username")
     if not _valid_username(username):
         return jsonify({"error": "invalid_username"}), 400
+    t0 = time.monotonic()
     try:
         data = github.fetch_github_data(username, token=config.GITHUB_PAT)
     except Exception:
         # Previously returned f"fetch failed: {e}" which leaks internal
         # exception text (URLs, stack fragments) across the trust boundary.
+        analytics.record_fetch(username, 502, int((time.monotonic() - t0) * 1000))
         log.exception("github fetch failed for %s", username)
         return jsonify({"error": "fetch_failed"}), 502
     if _is_github_not_found(data):
         data = {"error": "not_found"}
+        analytics.record_fetch(username, 404, int((time.monotonic() - t0) * 1000))
+    else:
+        analytics.record_fetch(username, 200, int((time.monotonic() - t0) * 1000))
     old = db.get_user(username)
     old_hash = old["payload_hash"] if old else None
     new_hash = db.upsert_user(username, data)
@@ -113,13 +126,18 @@ def _bg_fetch(username: str) -> None:
     time out on long fetches.
     """
     try:
+        t0 = time.monotonic()
         try:
             data = github.fetch_github_data(username, token=config.GITHUB_PAT)
             if _is_github_not_found(data):
                 data = {"error": "not_found"}
+                analytics.record_fetch(username, 404, int((time.monotonic() - t0) * 1000))
+            else:
+                analytics.record_fetch(username, 200, int((time.monotonic() - t0) * 1000))
             payload_hash = db.upsert_user(username, data)
             ok = True
         except Exception:
+            analytics.record_fetch(username, 502, int((time.monotonic() - t0) * 1000))
             log.exception("background fetch failed for %s", username)
             payload_hash = ""
             ok = False

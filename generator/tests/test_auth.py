@@ -181,3 +181,67 @@ def test_callback_happy_path_sets_session(api_client, monkeypatch):
         assert s["gh_avatar_url"] == "https://x/a.png"
     # Row should now exist with github profile populated.
     assert dbmod.get_settings("alice") is not None
+
+
+def test_require_basic_auth_503_when_unset(monkeypatch):
+    from flask import Flask, jsonify
+    from src import auth as authmod
+    from src import config as cfg
+
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_USER", "")
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_PASSWORD", "")
+    app = Flask(__name__)
+
+    @app.route("/x")
+    @authmod.require_basic_auth
+    def x():
+        return jsonify({"ok": True})
+
+    with app.test_client() as c:
+        r = c.get("/x")
+        assert r.status_code == 503
+
+
+def test_require_basic_auth_401_on_bad(monkeypatch):
+    import base64
+    from flask import Flask, jsonify
+    from src import auth as authmod
+    from src import config as cfg
+
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_USER", "admin")
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_PASSWORD", "pw")
+    app = Flask(__name__)
+
+    @app.route("/x")
+    @authmod.require_basic_auth
+    def x():
+        return jsonify({"ok": True})
+
+    with app.test_client() as c:
+        r = c.get("/x")
+        assert r.status_code == 401
+        assert r.headers.get("WWW-Authenticate", "").startswith("Basic")
+        bad = base64.b64encode(b"admin:wrong").decode()
+        r2 = c.get("/x", headers={"Authorization": f"Basic {bad}"})
+        assert r2.status_code == 401
+
+
+def test_require_basic_auth_200_on_good(monkeypatch):
+    import base64
+    from flask import Flask, jsonify
+    from src import auth as authmod
+    from src import config as cfg
+
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_USER", "admin")
+    monkeypatch.setattr(cfg, "DEV_DASHBOARD_PASSWORD", "pw")
+    app = Flask(__name__)
+
+    @app.route("/x")
+    @authmod.require_basic_auth
+    def x():
+        return jsonify({"ok": True})
+
+    with app.test_client() as c:
+        good = base64.b64encode(b"admin:pw").decode()
+        r = c.get("/x", headers={"Authorization": f"Basic {good}"})
+        assert r.status_code == 200

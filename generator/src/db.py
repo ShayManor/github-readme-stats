@@ -15,6 +15,7 @@ from . import config
 
 SETTINGS_DB_PATH = config.SETTINGS_DB_PATH
 WIDGETS_DB_PATH = config.WIDGETS_DB_PATH
+ANALYTICS_DB_PATH = config.ANALYTICS_DB_PATH
 
 _SETTINGS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -85,6 +86,24 @@ CREATE INDEX IF NOT EXISTS idx_widgets_username ON widgets(username);
 CREATE INDEX IF NOT EXISTS idx_widget_data_username ON widget_data(username);
 """
 
+_ANALYTICS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts          INTEGER NOT NULL,
+    service     TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    username    TEXT,
+    endpoint    TEXT,
+    widget      TEXT,
+    status      INTEGER,
+    latency_ms  INTEGER NOT NULL,
+    cache_hit   INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(username, ts);
+CREATE INDEX IF NOT EXISTS idx_events_endpoint_ts ON events(endpoint, ts);
+"""
+
 
 def _now() -> str:
     return datetime.utcnow().isoformat(timespec="seconds") + "Z"
@@ -123,6 +142,21 @@ def _widgets_conn():
         conn.close()
 
 
+@contextmanager
+def analytics_conn():
+    conn = _open(ANALYTICS_DB_PATH)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def init_analytics_db() -> None:
+    with analytics_conn() as c:
+        c.executescript(_ANALYTICS_SCHEMA)
+        c.commit()
+
+
 def init_dbs() -> None:
     with _settings_conn() as c:
         c.executescript(_SETTINGS_SCHEMA)
@@ -138,6 +172,7 @@ def init_dbs() -> None:
     with _widgets_conn() as c:
         c.executescript(_WIDGETS_SCHEMA)
         c.commit()
+    init_analytics_db()
 
 
 def settings_hash(settings: dict) -> str:

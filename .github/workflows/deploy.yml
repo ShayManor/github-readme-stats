@@ -84,4 +84,6 @@ jobs:
           GH_OAUTH_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
           GENERATOR_SECRET_KEY: ${{ secrets.GENERATOR_SECRET_KEY }}
           ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+          DEV_DASHBOARD_USER: ${{ secrets.DEV_DASHBOARD_USER }}
+          DEV_DASHBOARD_PASSWORD: ${{ secrets.DEV_DASHBOARD_PASSWORD }}
         run: ./deploy/deploy.sh

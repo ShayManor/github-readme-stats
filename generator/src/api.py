@@ -25,7 +25,7 @@ from functools import wraps
 from threading import BoundedSemaphore, Lock
 from flask import Flask, jsonify, request, Response, send_from_directory, session
 
-from . import auth, config, db, fetcher_client, placeholder, processor
+from . import analytics, auth, config, db, fetcher_client, placeholder, processor
 from .themes import THEMES
 from .utils import is_valid_username, settings_size_ok
 from .widgets import render_grade_widget
@@ -600,6 +600,21 @@ def internal_data_ready():
     return jsonify({"queued": True, "job_id": job_id}), 200
 
 
+@app.route("/internal/analytics/events", methods=["POST"])
+def internal_analytics_events():
+    token = request.headers.get("X-Internal-Token", "")
+    if not config.FETCHER_INTERNAL_TOKEN or not hmac.compare_digest(
+        token, config.FETCHER_INTERNAL_TOKEN
+    ):
+        return jsonify({"error": "unauthorized"}), 401
+    body = request.get_json(silent=True) or {}
+    events = body.get("events", [])
+    if not isinstance(events, list):
+        return jsonify({"error": "bad_request"}), 400
+    n = analytics.ingest_batch(events)
+    return jsonify({"ingested": n})
+
+
 @app.route("/api/<username>", methods=["GET"])
 @rate_limited("read")
 def get_widget(username: str):
@@ -828,12 +843,15 @@ def _serve_profile_widget(username: str) -> Response:
         payload = result.get("data") or {}
         if payload.get("error") == "not_found":
             return _placeholder_response("not_found", username, theme=theme)
+        t0 = time.monotonic()
         grade = processor.compute_grade(
             payload,
             custom_tags=settings_row["settings"].get("custom_tags"),
         )
         ws = (settings_row["settings"].get("widget_settings") or {}).get("grade")
         svg = render_grade_widget(grade, theme, settings=ws)
+        analytics.record_render(username, "grade",
+                                int((time.monotonic() - t0) * 1000))
     except Exception:
         log.exception("profile widget render failed for %s", username)
         return _placeholder_response("building", username, theme=theme)
@@ -957,6 +975,32 @@ def refresh(username: str):
     return jsonify({"refreshed": True, "job_id": job_id})
 
 
+@app.route("/api/dev/summary", methods=["GET"])
+@auth.require_basic_auth
+def dev_summary():
+    return jsonify(analytics.query_summary())
+
+
+@app.route("/api/dev/users", methods=["GET"])
+@auth.require_basic_auth
+def dev_users():
+    q = request.args.get("q", "")
+    sort = request.args.get("sort", "requests")
+    return jsonify(analytics.query_users(q=q, sort=sort))
+
+
+@app.route("/api/dev/latency", methods=["GET"])
+@auth.require_basic_auth
+def dev_latency():
+    return jsonify(analytics.query_latency())
+
+
+@app.route("/api/dev/health", methods=["GET"])
+@auth.require_basic_auth
+def dev_health():
+    return jsonify(analytics.query_health())
+
+
 @app.errorhandler(413)
 def _too_large(_e):
     return jsonify({"error": "payload_too_large"}), 413
@@ -983,8 +1027,20 @@ def _invalidate_widgets_on_new_build() -> None:
 def main():
     db.init_dbs()
     _invalidate_widgets_on_new_build()
+    analytics.start_flush_thread()
     app.run(host="0.0.0.0", port=config.PORT)
 
+
+def _boot_analytics_for_gunicorn():
+    """Gunicorn imports the module without calling main(); fire the daemon
+    flush thread here so render timings actually get flushed in production.
+    Idempotent — start_flush_thread checks for a running thread."""
+    try:
+        analytics.start_flush_thread()
+    except Exception:
+        log.exception("analytics boot failed")
+
+_boot_analytics_for_gunicorn()
 
 if __name__ == "__main__":
     main()

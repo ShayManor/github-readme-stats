@@ -6,7 +6,7 @@ import logging
 import os
 import time
 
-from . import config, db, fetcher_client
+from . import analytics, config, db, fetcher_client
 
 log = logging.getLogger("generator.cron")
 
@@ -47,6 +47,10 @@ def tick() -> dict:
             failed += 1
         if _TICK_INTER_USER_SLEEP_S > 0:
             time.sleep(_TICK_INTER_USER_SLEEP_S)
+    try:
+        analytics.prune_old()
+    except Exception:
+        log.exception("analytics prune failed")
     return {"enqueued": enqueued, "failed": failed, "skipped_queue_full": skipped_queue_full}
 
 

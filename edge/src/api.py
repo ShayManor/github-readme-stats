@@ -8,12 +8,13 @@ import requests
 from flask import Flask, Response, jsonify, request
 from flask_compress import Compress
 
-from . import cache as cache_mod, config
+from . import analytics, cache as cache_mod, config
 
 app = Flask(__name__)
 Compress(app)
 cache_ext = cache_mod.build_cache(app)
 log = logging.getLogger("edge")
+analytics.start_flush_thread()
 
 # GitHub usernames: 1-39 chars, alnum, single hyphens. Keep the regex in
 # sync with generator/src/utils/validate.py so invalid paths get rejected
@@ -98,6 +99,7 @@ def serve_widget(username: str, widget: str):
 
 
 def _serve(key_suffix: str, path: str) -> Response:
+    t0 = time.monotonic()
     ip = _client_ip()
     if not _allow(ip):
         return jsonify({"error": "rate_limited"}), 429
@@ -106,19 +108,23 @@ def _serve(key_suffix: str, path: str) -> Response:
     cached = cache_ext.get(ck)
     if cached is not None:
         body, content_type = cached
-        return Response(body, mimetype=content_type, headers={
+        resp = Response(body, mimetype=content_type, headers={
             "X-Widget-Status": "ready",
             "X-Cache": "HIT",
             "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400",
         })
+        _record(path, key_suffix, 200, t0, cache_hit=1)
+        return resp
 
     try:
         r = _fetch_origin(path, ip)
     except Exception as e:
         log.warning("origin unreachable for %s: %s", path, e)
+        _record(path, key_suffix, 503, t0, cache_hit=0)
         return jsonify({"error": "origin unreachable"}), 503
 
     if r.status_code >= 500:
+        _record(path, key_suffix, 503, t0, cache_hit=0)
         return jsonify({"error": "origin error"}), 503
 
     status = r.headers.get("X-Widget-Status", "ready")
@@ -129,11 +135,29 @@ def _serve(key_suffix: str, path: str) -> Response:
     else:
         cc = "no-store"
 
+    _record(path, key_suffix, r.status_code, t0, cache_hit=0)
     return Response(r.content, status=r.status_code, mimetype=content_type, headers={
         "X-Widget-Status": status,
         "X-Cache": "MISS",
         "Cache-Control": cc,
     })
+
+
+def _record(path: str, key_suffix: str, status: int, t0: float, cache_hit: int) -> None:
+    """Normalize the edge URL into (endpoint_template, username, widget)
+    so the dashboard can group across users without exploding cardinality."""
+    if "/" in key_suffix:
+        username, widget = key_suffix.split("/", 1)
+        endpoint = "/<u>/<widget>.svg"
+    else:
+        username = key_suffix
+        widget = "composite"
+        endpoint = "/<u>"
+    analytics.record_request(
+        endpoint=endpoint, username=username, widget=widget,
+        status=status, latency_ms=int((time.monotonic() - t0) * 1000),
+        cache_hit=cache_hit,
+    )
 
 
 def main():

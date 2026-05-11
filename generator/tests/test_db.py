@@ -9,6 +9,7 @@ def tmp_dbs(monkeypatch):
     with tempfile.TemporaryDirectory() as d:
         monkeypatch.setattr(dbmod, "SETTINGS_DB_PATH", os.path.join(d, "s.db"))
         monkeypatch.setattr(dbmod, "WIDGETS_DB_PATH", os.path.join(d, "w.db"))
+        monkeypatch.setattr(dbmod, "ANALYTICS_DB_PATH", os.path.join(d, "a.db"))
         dbmod.init_dbs()
         yield d
 
@@ -172,3 +173,15 @@ def test_put_user_streak_upserts(tmp_dbs):
     assert row["current_streak"] == 2
     assert row["max_streak"] == 5
     assert row["max_start"] == "2024-01-01"
+
+
+def test_init_dbs_creates_analytics_schema(tmp_path, monkeypatch):
+    from src import db as dbmod
+    monkeypatch.setattr(dbmod, "SETTINGS_DB_PATH", str(tmp_path / "s.db"))
+    monkeypatch.setattr(dbmod, "WIDGETS_DB_PATH", str(tmp_path / "w.db"))
+    monkeypatch.setattr(dbmod, "ANALYTICS_DB_PATH", str(tmp_path / "a.db"))
+    dbmod.init_dbs()
+    with dbmod.analytics_conn() as c:
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(events)").fetchall()}
+    assert cols == {"id", "ts", "service", "kind", "username",
+                    "endpoint", "widget", "status", "latency_ms", "cache_hit"}

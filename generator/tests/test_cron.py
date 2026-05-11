@@ -35,3 +35,24 @@ def test_tick_skips_when_hash_unchanged(tmp_dbs):
                return_value={"data": {}, "payload_hash": "same"}):
         stats = cronmod.tick()
     assert stats["enqueued"] == 0
+
+
+def test_cron_tick_prunes_old_analytics(tmp_path, monkeypatch):
+    import os, time
+    from src import db as dbmod, analytics, cron
+
+    monkeypatch.setattr(dbmod, "SETTINGS_DB_PATH", os.path.join(tmp_path, "s.db"))
+    monkeypatch.setattr(dbmod, "WIDGETS_DB_PATH", os.path.join(tmp_path, "w.db"))
+    monkeypatch.setattr(dbmod, "ANALYTICS_DB_PATH", os.path.join(tmp_path, "a.db"))
+    dbmod.init_dbs()
+    analytics.ingest_batch([
+        {"ts": int(time.time()) - 30 * 86400, "service": "edge", "kind": "request",
+         "username": "u", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 1, "cache_hit": 1},
+    ])
+    # tick() iterates enrolled users but there are none, so it returns
+    # immediately — we only care that the prune call ran.
+    cron.tick()
+    with dbmod.analytics_conn() as c:
+        n = c.execute("SELECT COUNT(*) AS n FROM events").fetchone()["n"]
+    assert n == 0

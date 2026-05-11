@@ -13,7 +13,7 @@ import logging
 import time
 from dataclasses import asdict
 
-from . import cache, config, db, fetcher_client, placeholder, processor
+from . import analytics, cache, config, db, fetcher_client, placeholder, processor
 from .widgets import compose_widget
 
 log = logging.getLogger("generator.worker")
@@ -53,12 +53,15 @@ def _render_and_persist(username: str, payload: dict, settings: dict, settings_h
     cron-driven worker so embedded widgets keep ticking forward (streak
     counter, etc.) as the fetcher refreshes the underlying data — without
     waiting for the user to manually click Generate."""
+    t0 = time.monotonic()
     widgets = _render_widgets(username, payload, settings)
     db.put_widgets(username, settings_hash, widgets)
     cache.Cache().delete(
         f"widget:composite:{username}",
         *[f"widget:{n}:{username}" for n in widgets],
     )
+    analytics.record_render(username, "composite",
+                            int((time.monotonic() - t0) * 1000))
 
 
 def _render_widgets(username: str, payload: dict, settings: dict) -> dict[str, str]:
@@ -155,7 +158,10 @@ def render_composite_adhoc(username: str, override_settings: dict) -> str | None
     if not payload or payload.get("error") == "not_found":
         return None
     effective = {**settings_row["settings"], **(override_settings or {})}
+    t0 = time.monotonic()
     widgets = _render_widgets(username, payload, effective)
+    analytics.record_render(username, "composite",
+                            int((time.monotonic() - t0) * 1000))
     return widgets.get("composite")
 
 
@@ -178,11 +184,14 @@ def render_widgets_now(username: str) -> dict[str, str]:
         cache.Cache().delete(f"widget:composite:{username}")
         return {"composite": svg}
 
+    t0 = time.monotonic()
     widgets = _render_widgets(username, payload, settings_row["settings"])
     db.put_widgets(username, settings_row["settings_hash"], widgets)
     db.point_current_widget(username, settings_row["settings_hash"])
     c = cache.Cache()
     c.delete(f"widget:composite:{username}", *[f"widget:{n}:{username}" for n in widgets])
+    analytics.record_render(username, "composite",
+                            int((time.monotonic() - t0) * 1000))
     log.info("rendered widgets on-demand for %s", username)
     return widgets
 

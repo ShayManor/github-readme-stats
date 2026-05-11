@@ -178,3 +178,27 @@ def test_process_one_merges_stored_max(tmp_dbs):
     assert row["max_streak"] == 50
     assert row["max_start"] == "2023-01-01"
     assert row["current_streak"] == 2
+
+
+def test_process_one_records_render_event(monkeypatch, tmp_path):
+    import os
+    from src import db as dbmod, worker, analytics, fetcher_client
+
+    monkeypatch.setattr(dbmod, "SETTINGS_DB_PATH", os.path.join(tmp_path, "s.db"))
+    monkeypatch.setattr(dbmod, "WIDGETS_DB_PATH", os.path.join(tmp_path, "w.db"))
+    monkeypatch.setattr(dbmod, "ANALYTICS_DB_PATH", os.path.join(tmp_path, "a.db"))
+    dbmod.init_dbs()
+    analytics._reset_for_tests()
+
+    dbmod.enroll("alice", {"theme": "dark",
+                           "enabled": ["grade"], "widget_order": ["grade"]})
+    monkeypatch.setattr(fetcher_client, "get_data",
+                        lambda u: {"data": {"user": {"login": "alice"}, "repos": [], "events": []},
+                                   "payload_hash": "h"})
+    monkeypatch.setattr(worker, "_render_widgets",
+                        lambda *a, **kw: {"composite": "<svg/>", "grade": "<svg/>"})
+    assert worker.process_one() is True
+    analytics.ingest_batch(analytics._drain_queue())
+    with dbmod.analytics_conn() as c:
+        rows = c.execute("SELECT username, widget, kind FROM events").fetchall()
+    assert ("alice", "composite", "render") in [(r["username"], r["widget"], r["kind"]) for r in rows]

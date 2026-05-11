@@ -78,3 +78,43 @@ def require_same_origin(fn):
             return jsonify({"error": "bad_origin"}), 403
         return fn(*args, **kwargs)
     return wrapper
+
+
+import base64
+import hmac as _hmac
+from functools import wraps as _wraps
+from flask import jsonify as _jsonify, request as _request
+
+from . import config as _config
+
+
+def require_basic_auth(fn):
+    """HTTP Basic Auth gate for the /dev dashboard. Returns 503 if either
+    credential env var is unset so a missing-secret deploy fails closed.
+    Constant-time comparison on the decoded user+pass concatenation keeps
+    the timing channel narrow without leaking length."""
+    @_wraps(fn)
+    def wrapper(*args, **kwargs):
+        u = _config.DEV_DASHBOARD_USER
+        p = _config.DEV_DASHBOARD_PASSWORD
+        if not u or not p:
+            return _jsonify({"error": "dashboard_disabled"}), 503
+        hdr = _request.headers.get("Authorization", "")
+        if not hdr.startswith("Basic "):
+            return _unauth()
+        try:
+            decoded = base64.b64decode(hdr[6:].encode("ascii"), validate=True).decode("utf-8")
+        except Exception:
+            return _unauth()
+        expected = f"{u}:{p}"
+        if not _hmac.compare_digest(decoded, expected):
+            return _unauth()
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+def _unauth():
+    resp = _jsonify({"error": "unauthorized"})
+    resp.status_code = 401
+    resp.headers["WWW-Authenticate"] = 'Basic realm="dev"'
+    return resp

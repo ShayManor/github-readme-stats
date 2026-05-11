@@ -3,6 +3,7 @@ import './index.css'
 import { SearchScreen } from './screens/SearchScreen'
 import { WorkshopScreen } from './screens/WorkshopScreen'
 import { ResultScreen } from './screens/ResultScreen'
+import { DevScreen } from './screens/DevScreen'
 import { AuthButton } from './components/AuthButton'
 import type { WidgetData } from './lib/renderWidgets'
 import { DEMO_WIDGET_DATA } from './lib/demoData'
@@ -69,6 +70,9 @@ function readWidgetStatus(r: Response): WidgetStatus {
 }
 
 export default function App() {
+  if (typeof window !== 'undefined' && window.location.pathname === '/dev') {
+    return <DevScreen />
+  }
   const [me, setMe] = useState<Me>({ login: null })
   const [step, setStep] = useState<Step>('search')
   const [username, setUsername] = useState('')
