@@ -222,15 +222,22 @@ def query_users(q: str = "", sort: str = "requests", limit: int = 200) -> list[d
     with db.analytics_conn() as c:
         c.execute("ATTACH DATABASE ? AS settings", (db.SETTINGS_DB_PATH,))
         try:
+            # Count any event kind (request OR render) as activity so the
+            # table matches `active_users_7d` in query_summary — without
+            # this, render-only users (e.g. cron-driven worker refreshes
+            # before any edge traffic) appear in the count but not the
+            # table, which looks like a bug.
             rows = c.execute(
                 """SELECT e.username AS username,
-                          COUNT(*) AS requests_7d,
+                          SUM(CASE WHEN e.kind='request' THEN 1 ELSE 0 END) AS requests_7d,
                           MAX(e.ts) AS last_seen,
-                          AVG(e.latency_ms) AS avg_latency_ms,
+                          COALESCE(AVG(CASE WHEN e.kind='request'
+                                            THEN e.latency_ms END), 0) AS avg_latency_ms,
                           (SELECT u.github_avatar_url FROM settings.users u
                             WHERE u.username = e.username) AS github_avatar_url
                    FROM events e
-                   WHERE e.kind='request' AND e.ts >= ? AND e.username IS NOT NULL
+                   WHERE e.kind IN ('request', 'render')
+                     AND e.ts >= ? AND e.username IS NOT NULL
                    GROUP BY e.username""",
                 (week_ago,),
             ).fetchall()

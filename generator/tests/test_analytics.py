@@ -166,3 +166,21 @@ def test_queue_drops_when_full_and_counts(fresh, monkeypatch):
     for i in range(10):
         a.record_render("u", "composite", i)
     assert a._events_dropped == 7
+
+
+def test_query_users_includes_render_only_users(fresh):
+    """Render-only users (worker fired but no edge traffic yet) must still
+    appear in the table — without this, `active_users_7d` says N while the
+    table looks empty, which reads as a bug."""
+    now = int(time.time())
+    a.ingest_batch([
+        {"ts": now - 60, "service": "generator", "kind": "render",
+         "username": "alice", "widget": "composite", "latency_ms": 200},
+    ])
+    users = a.query_users()
+    assert len(users) == 1
+    u = users[0]
+    assert u["username"] == "alice"
+    assert u["requests_7d"] == 0      # no request events yet
+    assert u["last_seen"] == now - 60
+    assert u["avg_latency_ms"] == 0   # latency only averages request events
