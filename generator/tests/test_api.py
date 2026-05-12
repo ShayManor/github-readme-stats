@@ -654,3 +654,61 @@ def test_dev_page_serves_html_with_good_creds(client, monkeypatch, tmp_path):
     r = client.get("/dev", headers=_basic())
     # 200 if the bundle is on disk, 503 otherwise — both prove auth passed.
     assert r.status_code in (200, 503)
+
+
+def test_get_widget_records_request_event(client, monkeypatch):
+    """Hitting /api/<u> must emit one analytics 'request' event so the
+    dashboard's req_7d/top_endpoint/avg_latency columns actually populate
+    in deployments without an edge in front."""
+    from src import analytics
+    analytics._reset_for_tests()
+    monkeypatch.setattr(dbmod, "enroll", lambda *a, **kw: {"job_id": None})
+    # Enroll the user so /api/<u> serves a placeholder rather than 4xx;
+    # status doesn't matter — we only care that an event is recorded.
+    dbmod.enroll("alice", {"theme": "dark", "enabled": ["grade"], "widget_order": ["grade"]})
+    client.get("/api/alice")
+    # Drain the in-memory queue (the daemon flush thread isn't running in tests)
+    analytics.ingest_batch(analytics._drain_queue())
+    with dbmod.analytics_conn() as c:
+        rows = c.execute(
+            "SELECT username, widget, endpoint, kind FROM events WHERE kind='request'"
+        ).fetchall()
+    assert any(
+        r["username"] == "alice" and r["widget"] == "composite"
+        and r["endpoint"] == "/api/<u>"
+        for r in rows
+    )
+
+
+def test_get_widget_named_records_endpoint_template(client, monkeypatch):
+    from src import analytics
+    analytics._reset_for_tests()
+    dbmod.enroll("bob", {"theme": "dark", "enabled": ["grade"], "widget_order": ["grade"]})
+    client.get("/api/bob/grade.svg")
+    analytics.ingest_batch(analytics._drain_queue())
+    with dbmod.analytics_conn() as c:
+        rows = c.execute(
+            "SELECT username, widget, endpoint FROM events WHERE kind='request'"
+        ).fetchall()
+    assert any(
+        r["username"] == "bob" and r["widget"] == "grade"
+        and r["endpoint"] == "/api/<u>/<widget>.svg"
+        for r in rows
+    )
+
+
+def test_get_user_data_records_request_event(client, monkeypatch):
+    from src import analytics
+    analytics._reset_for_tests()
+    dbmod.enroll("carol", {"theme": "dark", "enabled": ["grade"], "widget_order": ["grade"]})
+    client.get("/api/carol/data")
+    analytics.ingest_batch(analytics._drain_queue())
+    with dbmod.analytics_conn() as c:
+        rows = c.execute(
+            "SELECT username, widget, endpoint FROM events WHERE kind='request'"
+        ).fetchall()
+    assert any(
+        r["username"] == "carol" and r["widget"] == "data"
+        and r["endpoint"] == "/api/<u>/data"
+        for r in rows
+    )

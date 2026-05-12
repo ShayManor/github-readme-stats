@@ -167,6 +167,41 @@ def rate_limited(bucket: str):
     return deco
 
 
+def track_request(widget):
+    """Record one analytics 'request' event per call. `widget` may be a
+    literal string or a callable taking the route kwargs.
+
+    The endpoint template comes from Flask's matched url_rule; the
+    username is the route arg or `?username=` query param. Stack ABOVE
+    @rate_limited so 429s are counted too — rate-limit hits are signal.
+    """
+    def deco(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            t0 = time.monotonic()
+            resp = fn(*args, **kwargs)
+            try:
+                uname = kwargs.get("username") or request.args.get("username") or ""
+                uname = uname.lower() if isinstance(uname, str) and uname else None
+                if isinstance(resp, tuple):
+                    status_code = resp[1] if len(resp) > 1 else 200
+                else:
+                    status_code = getattr(resp, "status_code", 200)
+                rule = request.url_rule.rule if request.url_rule else ""
+                endpoint = rule.replace("<username>", "<u>")
+                w = widget(kwargs) if callable(widget) else widget
+                analytics.record_request(
+                    endpoint=endpoint, username=uname, widget=w,
+                    status=int(status_code),
+                    latency_ms=int((time.monotonic() - t0) * 1000),
+                )
+            except Exception:
+                log.exception("analytics record_request failed")
+            return resp
+        return wrapper
+    return deco
+
+
 
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
@@ -435,7 +470,20 @@ def spa(path: str):
     # SVG directly. No SPA, no composite — the single widget that README
     # embeds care about. `/api/<u>` and friends keep working below.
     if path in ("", "api", "api/") and request.args.get("username"):
-        return _serve_profile_widget(request.args.get("username", ""))
+        t0 = time.monotonic()
+        u = request.args.get("username", "")
+        resp = _serve_profile_widget(u)
+        try:
+            status_code = resp[1] if isinstance(resp, tuple) else getattr(resp, "status_code", 200)
+            analytics.record_request(
+                endpoint="/?username=<u>",
+                username=(u or "").lower() if isinstance(u, str) else None,
+                widget="grade", status=int(status_code),
+                latency_ms=int((time.monotonic() - t0) * 1000),
+            )
+        except Exception:
+            log.exception("analytics record_request failed")
+        return resp
     if path.startswith("api/"):
         return jsonify({"error": "not found"}), 404
     if path:
@@ -629,6 +677,7 @@ def internal_analytics_events():
 
 
 @app.route("/api/<username>", methods=["GET"])
+@track_request("composite")
 @rate_limited("read")
 def get_widget(username: str):
     if not is_valid_username(username):
@@ -637,6 +686,7 @@ def get_widget(username: str):
 
 
 @app.route("/api/<username>/<widget>.svg", methods=["GET"])
+@track_request(lambda kw: kw.get("widget"))
 @rate_limited("read")
 def get_widget_named(username: str, widget: str):
     if not is_valid_username(username):
@@ -647,6 +697,7 @@ def get_widget_named(username: str, widget: str):
 
 
 @app.route("/api/top-langs", methods=["GET"])
+@track_request("languages")
 @rate_limited("read")
 def compat_top_langs():
     """Compatibility shim for upstream anuraghazra/github-readme-stats URLs.
@@ -688,6 +739,7 @@ def compat_top_langs():
 
 
 @app.route("/api/<username>/data", methods=["GET"])
+@track_request("data")
 @rate_limited("read")
 def get_user_data(username: str):
     """Precomputed widget data for client-side SVG rendering.
