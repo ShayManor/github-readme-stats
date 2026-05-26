@@ -778,6 +778,11 @@ def get_user_data(username: str):
 
     row = db.get_current_widget_data(username)
     if row is None:
+        # Same self-heal as _serve: covers the case where a build
+        # permanently failed and nothing else will re-enqueue it.
+        if not db.has_open_build(username):
+            db.enqueue_build(username)
+            _kickoff_prefetch_async(username)
         return jsonify({"status": "building"}), 202
 
     if row["settings_hash"] == "not_found":
@@ -863,6 +868,16 @@ def _serve(username: str, widget_name: str) -> Response:
 
     svg = db.get_current_widget(username, widget_name)
     if svg is None:
+        # Enrolled but no widget for this hash. Almost always the brief
+        # window before the worker drains the build job enrolled queued.
+        # The edge case worth handling: the build permanently failed
+        # (MAX_ATTEMPTS=3 → status='failed'), and the cron loop only
+        # re-enqueues on payload-hash changes, so the user would otherwise
+        # sit on "building" until GitHub data changed. Self-heal by
+        # enqueuing a fresh build if nothing's in flight.
+        if not db.has_open_build(username):
+            db.enqueue_build(username)
+            _kickoff_prefetch_async(username)
         return _placeholder_response("building", username, theme=theme)
 
     headers = {"X-Widget-Status": "ready",
@@ -895,6 +910,7 @@ def _serve_profile_widget(username: str) -> Response:
         return jsonify({"error": "rate_limited"}), 429
 
     settings_row = db.get_settings(username)
+    just_enrolled = False
     if settings_row is None:
         if db.enrollments_today() >= config.ENROLLMENT_DAILY_CAP:
             return _placeholder_response("rate_limited", username)
@@ -904,6 +920,7 @@ def _serve_profile_widget(username: str) -> Response:
             "widget_order": config.WIDGET_ORDER,
         }
         db.enroll(username, defaults)
+        just_enrolled = True
         settings_row = db.get_settings(username)
         if settings_row is None:
             return _placeholder_response("building", username)
@@ -938,6 +955,13 @@ def _serve_profile_widget(username: str) -> Response:
         _GENERATE_SEMAPHORE.release()
 
     db.touch_last_requested(username)
+    # Drain the build job enqueued by db.enroll in-process. Placed after the
+    # sync fetcher call so process_one reuses the cached fetcher payload
+    # instead of racing it for a second GitHub fetch. Safety net for the
+    # case where the worker container is unhealthy — without this, all
+    # widgets except grade would sit on "building" until cron flips.
+    if just_enrolled:
+        _kickoff_prefetch_async(username)
     return Response(
         svg,
         mimetype="image/svg+xml",
