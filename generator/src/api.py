@@ -799,6 +799,20 @@ def _serve(username: str, widget_name: str) -> Response:
     """
     settings_row = db.get_settings(username)
     if settings_row is None:
+        # Auto-enroll on first hit so embed URLs for never-seen users
+        # actually trigger a build, instead of returning a "building"
+        # placeholder that nothing ever resolves. Same daily-cap +
+        # triple-kickoff pattern as /api/<u>/data and /api/top-langs.
+        if db.enrollments_today() >= config.ENROLLMENT_DAILY_CAP:
+            return _placeholder_response("rate_limited", username)
+        defaults = {
+            "theme": "dark",
+            "enabled": config.ENABLED_WIDGETS,
+            "widget_order": config.WIDGET_ORDER,
+        }
+        db.enroll(username, defaults)
+        _request_fetch_async(username)
+        _kickoff_prefetch_async(username)
         return _placeholder_response("building", username)
 
     db.touch_last_requested(username)

@@ -87,14 +87,15 @@ def test_root_without_username_serves_spa(client):
     assert r.mimetype != "image/svg+xml"
 
 
-def test_get_unknown_user_returns_building_placeholder_without_enrolling(client):
-    """The SVG endpoint is for README embeds — enrollment is frontend-driven
-    through /data or /api/enroll, so GET /api/<u> does not auto-enroll."""
+def test_get_unknown_user_auto_enrolls_and_returns_building(client):
+    """The SVG embed endpoint must kick off enrollment + prefetch on first
+    hit — otherwise a README embed for a never-seen username would return
+    'building' forever with nothing ever advancing the build."""
     r = client.get("/api/alice")
     assert r.status_code == 200
     assert r.headers["X-Widget-Status"] == "building"
     assert "Building" in r.data.decode()
-    assert dbmod.get_settings("alice") is None
+    assert dbmod.get_settings("alice") is not None
 
 
 def test_enrolled_but_not_generated_returns_building(client):
