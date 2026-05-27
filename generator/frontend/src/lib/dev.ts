@@ -36,6 +36,11 @@ export type Health = {
   oldest_event_ts: number | null
 }
 
+export type Growth = {
+  daily: { day: string; users: number; requests: number }[]
+  weekly: { week: string; users: number; requests: number }[]
+}
+
 async function getJSON<T>(path: string): Promise<T> {
   const r = await fetch(path, { credentials: 'include' })
   if (r.status === 401) throw new Error('unauthorized')
@@ -49,3 +54,4 @@ export const fetchUsers = (q = '', sort = 'requests') =>
   getJSON<UserRow[]>(`/api/dev/users?q=${encodeURIComponent(q)}&sort=${sort}`)
 export const fetchLatency = () => getJSON<LatencyRow[]>('/api/dev/latency')
 export const fetchHealth = () => getJSON<Health>('/api/dev/health')
+export const fetchGrowth = () => getJSON<Growth>('/api/dev/growth')

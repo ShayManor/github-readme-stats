@@ -5,6 +5,7 @@ import { StatCards } from '../components/StatCards'
 import { UsersTable } from '../components/UsersTable'
 import { LatencyChart } from '../components/LatencyChart'
 import { HealthStrip } from '../components/HealthStrip'
+import { GrowthChart } from '../components/GrowthChart'
 
 const REFRESH_MS = 15_000
 
@@ -45,6 +46,9 @@ export function DevScreen() {
   return (
     <Shell lastRefresh={lastRefresh}>
       {s ? <StatCards s={s} /> : <div className="text-white/40">loading…</div>}
+      <div className="mt-6">
+        <GrowthChart />
+      </div>
       <div className="mt-6">
         <UsersTable />
       </div>

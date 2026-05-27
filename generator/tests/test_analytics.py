@@ -121,6 +121,44 @@ def test_query_latency_returns_percentiles(fresh):
     assert by_ep["/<u>"]["p99"] == 99
 
 
+def test_query_growth_buckets_by_day_and_week(fresh):
+    now = int(time.time())
+    a.ingest_batch([
+        # Today: alice (2 requests), bob (1 request), carol (render only)
+        {"ts": now - 60, "service": "edge", "kind": "request",
+         "username": "alice", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 10, "cache_hit": 1},
+        {"ts": now - 120, "service": "edge", "kind": "request",
+         "username": "alice", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 10, "cache_hit": 1},
+        {"ts": now - 180, "service": "edge", "kind": "request",
+         "username": "bob", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 10, "cache_hit": 1},
+        {"ts": now - 240, "service": "generator", "kind": "render",
+         "username": "carol", "widget": "composite", "latency_ms": 100},
+        # 10 days ago: dave (1 request) — outside the 30d window's start
+        # would still land in the daily bucket if within range
+        {"ts": now - 10 * 86400, "service": "edge", "kind": "request",
+         "username": "dave", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 10, "cache_hit": 1},
+    ])
+    g = a.query_growth(daily_n=30, weekly_n=12)
+    assert len(g["daily"]) == 30
+    assert len(g["weekly"]) == 12
+    # Today = last entry. Requests count only kind='request', users include
+    # render-only callers — matching active_users_7d's definition.
+    today = g["daily"][-1]
+    assert today["requests"] == 3
+    assert today["users"] == 3  # alice, bob, carol
+    # 10-day-ago bucket has dave's single request
+    ten_days_ago = g["daily"][-11]
+    assert ten_days_ago["requests"] == 1
+    assert ten_days_ago["users"] == 1
+    # Current week (last weekly entry) includes today's traffic
+    assert g["weekly"][-1]["requests"] >= 3
+    assert g["weekly"][-1]["users"] >= 3
+
+
 def test_query_health(fresh):
     now = int(time.time())
     a.ingest_batch([

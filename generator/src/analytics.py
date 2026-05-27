@@ -277,6 +277,63 @@ def query_users(q: str = "", sort: str = "requests", limit: int = 200) -> list[d
     return out[: max(1, min(int(limit), 500))]
 
 
+def query_growth(daily_n: int = 30, weekly_n: int = 12) -> dict:
+    """Per-day and per-week unique users + request counts.
+
+    Powers the /dev dashboard's growth chart. "Users" mirrors the
+    active_users definition in query_summary — any kind in (request,
+    render) counts as active for that bucket. "Requests" counts only
+    kind='request' rows, matching requests_7d.
+
+    Returns:
+        {"daily":  [{"day":  "YYYY-MM-DD", "users": int, "requests": int}, ...],  # oldest -> newest
+         "weekly": [{"week": "GGGG-Www",   "users": int, "requests": int}, ...]}
+    """
+    now = int(time.time())
+    daily_start = now - daily_n * 86400
+    weekly_start = now - weekly_n * 7 * 86400
+    start = min(daily_start, weekly_start)
+    with db.analytics_conn() as c:
+        rows = c.execute(
+            """SELECT ts, kind, username FROM events
+               WHERE kind IN ('request', 'render') AND ts >= ?""",
+            (start,),
+        ).fetchall()
+    daily_buckets: dict[str, dict] = {}
+    weekly_buckets: dict[str, dict] = {}
+    for r in rows:
+        gm = time.gmtime(r["ts"])
+        day = time.strftime("%Y-%m-%d", gm)
+        # %G/%V is ISO-8601 week-numbering year + week, which handles
+        # year-boundary weeks correctly (unlike %Y/%U).
+        week = time.strftime("%G-W%V", gm)
+        for buckets, key in ((daily_buckets, day), (weekly_buckets, week)):
+            b = buckets.setdefault(key, {"requests": 0, "users": set()})
+            if r["kind"] == "request":
+                b["requests"] += 1
+            if r["username"]:
+                b["users"].add(r["username"])
+    daily = []
+    for i in range(daily_n - 1, -1, -1):
+        d = time.strftime("%Y-%m-%d", time.gmtime(now - i * 86400))
+        b = daily_buckets.get(d)
+        daily.append({
+            "day": d,
+            "requests": b["requests"] if b else 0,
+            "users": len(b["users"]) if b else 0,
+        })
+    weekly = []
+    for i in range(weekly_n - 1, -1, -1):
+        wk = time.strftime("%G-W%V", time.gmtime(now - i * 7 * 86400))
+        b = weekly_buckets.get(wk)
+        weekly.append({
+            "week": wk,
+            "requests": b["requests"] if b else 0,
+            "users": len(b["users"]) if b else 0,
+        })
+    return {"daily": daily, "weekly": weekly}
+
+
 def query_latency() -> list[dict]:
     now = int(time.time())
     week_ago = now - 7 * 86400

@@ -1104,6 +1104,12 @@ def dev_health():
     return jsonify(analytics.query_health())
 
 
+@app.route("/api/dev/growth", methods=["GET"])
+@auth.require_basic_auth
+def dev_growth():
+    return jsonify(analytics.query_growth())
+
+
 @app.errorhandler(413)
 def _too_large(_e):
     return jsonify({"error": "payload_too_large"}), 413
