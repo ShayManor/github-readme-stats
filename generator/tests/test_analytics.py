@@ -159,6 +159,58 @@ def test_query_growth_buckets_by_day_and_week(fresh):
     assert g["weekly"][-1]["users"] >= 3
 
 
+def test_growth_numbers_survive_event_prune(fresh):
+    """The whole point of daily_stats: per-day counts must persist even
+    after their underlying events get pruned past the retention window."""
+    now = int(time.time())
+    twenty_days_ago = now - 20 * 86400
+    a.ingest_batch([
+        {"ts": twenty_days_ago, "service": "edge", "kind": "request",
+         "username": "alice", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 10, "cache_hit": 1},
+        {"ts": twenty_days_ago + 60, "service": "edge", "kind": "request",
+         "username": "bob", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 10, "cache_hit": 1},
+        {"ts": twenty_days_ago + 120, "service": "edge", "kind": "request",
+         "username": "alice", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 10, "cache_hit": 1},
+    ])
+    a.rollup_daily_stats()
+    pruned = a.prune_old(retention_days=14)
+    assert pruned == 3  # all three events were older than 14 days
+
+    g = a.query_growth(daily_n=30, weekly_n=12)
+    target_day = time.strftime("%Y-%m-%d", time.gmtime(twenty_days_ago))
+    bucket = next(d for d in g["daily"] if d["day"] == target_day)
+    assert bucket["requests"] == 3
+    assert bucket["users"] == 2  # alice (deduped) + bob
+
+
+def test_weekly_uniques_dedupe_across_days(fresh):
+    """A user active on multiple days within the same ISO week counts
+    once for that week — set union, not sum-of-daily-uniques."""
+    now = int(time.time())
+    # Pin to a known weekday so all three timestamps land in the same ISO week.
+    # Monday-ish: subtract `weekday` days from now to land near Mon, then offset.
+    monday = now - time.gmtime(now).tm_wday * 86400 + 12 * 3600  # noon UTC Monday
+    a.ingest_batch([
+        {"ts": monday, "service": "edge", "kind": "request",
+         "username": "alice", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 10, "cache_hit": 1},
+        {"ts": monday + 86400, "service": "edge", "kind": "request",
+         "username": "alice", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 10, "cache_hit": 1},
+        {"ts": monday + 2 * 86400, "service": "edge", "kind": "request",
+         "username": "bob", "endpoint": "/<u>", "widget": "composite",
+         "status": 200, "latency_ms": 10, "cache_hit": 1},
+    ])
+    g = a.query_growth(daily_n=30, weekly_n=12)
+    target_week = time.strftime("%G-W%V", time.gmtime(monday))
+    week_row = next(w for w in g["weekly"] if w["week"] == target_week)
+    assert week_row["requests"] == 3
+    assert week_row["users"] == 2  # alice (Mon+Tue) deduped + bob (Wed)
+
+
 def test_query_health(fresh):
     now = int(time.time())
     a.ingest_batch([

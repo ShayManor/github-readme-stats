@@ -48,6 +48,13 @@ def tick() -> dict:
         if _TICK_INTER_USER_SLEEP_S > 0:
             time.sleep(_TICK_INTER_USER_SLEEP_S)
     try:
+        # Snapshot first, prune second: rollup persists the per-day
+        # aggregates that the growth chart reads, then prune drops the
+        # raw events whose stats we just captured.
+        analytics.rollup_daily_stats()
+    except Exception:
+        log.exception("analytics rollup failed")
+    try:
         analytics.prune_old()
     except Exception:
         log.exception("analytics prune failed")

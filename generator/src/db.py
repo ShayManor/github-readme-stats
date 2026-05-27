@@ -102,6 +102,18 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(username, ts);
 CREATE INDEX IF NOT EXISTS idx_events_endpoint_ts ON events(endpoint, ts);
+
+-- Per-day aggregates that outlive the events table. Events are pruned at
+-- ANALYTICS_RETENTION_DAYS (14d default), but the dev dashboard's growth
+-- chart needs per-day/per-week numbers going back further. analytics.py's
+-- rollup writes one row per day with the request count and the set of
+-- unique usernames (as JSON, so weekly uniques can be computed by union).
+CREATE TABLE IF NOT EXISTS daily_stats (
+    day         TEXT PRIMARY KEY,
+    requests    INTEGER NOT NULL,
+    users_json  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
 """
 
 

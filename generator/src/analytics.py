@@ -9,6 +9,7 @@ All writes go through a shared bounded deque so the hot path never blocks on
 SQLite I/O. A daemon thread flushes the queue every _FLUSH_SECONDS into
 analytics.db in a single transaction.
 """
+import json
 import logging
 import math
 import threading
@@ -277,59 +278,120 @@ def query_users(q: str = "", sort: str = "requests", limit: int = 200) -> list[d
     return out[: max(1, min(int(limit), 500))]
 
 
+def rollup_daily_stats() -> int:
+    """Snapshot the events table into daily_stats so per-day numbers
+    survive the 14d event prune.
+
+    Aggregates every day that still has events in the events table,
+    UPSERTing one row per day with (request count, JSON list of unique
+    usernames). Days whose events have already been pruned are left
+    untouched — their previously-written daily_stats row is preserved.
+
+    Idempotent: re-running rebuilds the affected days from current
+    events. Pairs with prune_old, which aligns its cutoff to UTC
+    midnight so a day is either entirely retained or entirely pruned
+    (no half-pruned days that would corrupt the snapshot on next call).
+
+    Returns number of day rows written.
+    """
+    with db.analytics_conn() as c:
+        rows = c.execute(
+            """SELECT ts, kind, username FROM events
+               WHERE kind IN ('request', 'render')"""
+        ).fetchall()
+    if not rows:
+        return 0
+    buckets: dict[str, dict] = {}
+    for r in rows:
+        day = time.strftime("%Y-%m-%d", time.gmtime(r["ts"]))
+        b = buckets.setdefault(day, {"requests": 0, "users": set()})
+        if r["kind"] == "request":
+            b["requests"] += 1
+        if r["username"]:
+            b["users"].add(r["username"])
+    now_iso = db._now()
+    payload = [
+        {"day": day,
+         "requests": b["requests"],
+         "users_json": json.dumps(sorted(b["users"]), separators=(",", ":")),
+         "updated_at": now_iso}
+        for day, b in buckets.items()
+    ]
+    with db.analytics_conn() as c:
+        c.executemany(
+            """INSERT INTO daily_stats(day, requests, users_json, updated_at)
+               VALUES (:day, :requests, :users_json, :updated_at)
+               ON CONFLICT(day) DO UPDATE SET
+                   requests   = excluded.requests,
+                   users_json = excluded.users_json,
+                   updated_at = excluded.updated_at""",
+            payload,
+        )
+        c.commit()
+    return len(payload)
+
+
 def query_growth(daily_n: int = 30, weekly_n: int = 12) -> dict:
     """Per-day and per-week unique users + request counts.
 
-    Powers the /dev dashboard's growth chart. "Users" mirrors the
-    active_users definition in query_summary — any kind in (request,
-    render) counts as active for that bucket. "Requests" counts only
-    kind='request' rows, matching requests_7d.
+    Reads from daily_stats (the long-lived snapshot table) so historical
+    numbers survive past the 14d event retention. Calls rollup_daily_stats
+    first so today's partial-day numbers are fresh even between cron ticks.
+
+    "Users" mirrors the active_users definition in query_summary — any
+    kind in (request, render) counts as active. Weekly uniques are the
+    set-union across the week's days (not a sum), so a user active on
+    multiple days in the same week counts once.
 
     Returns:
         {"daily":  [{"day":  "YYYY-MM-DD", "users": int, "requests": int}, ...],  # oldest -> newest
          "weekly": [{"week": "GGGG-Www",   "users": int, "requests": int}, ...]}
     """
+    rollup_daily_stats()
     now = int(time.time())
-    daily_start = now - daily_n * 86400
-    weekly_start = now - weekly_n * 7 * 86400
-    start = min(daily_start, weekly_start)
     with db.analytics_conn() as c:
-        rows = c.execute(
-            """SELECT ts, kind, username FROM events
-               WHERE kind IN ('request', 'render') AND ts >= ?""",
-            (start,),
+        stat_rows = c.execute(
+            "SELECT day, requests, users_json FROM daily_stats"
         ).fetchall()
-    daily_buckets: dict[str, dict] = {}
-    weekly_buckets: dict[str, dict] = {}
-    for r in rows:
-        gm = time.gmtime(r["ts"])
-        day = time.strftime("%Y-%m-%d", gm)
-        # %G/%V is ISO-8601 week-numbering year + week, which handles
-        # year-boundary weeks correctly (unlike %Y/%U).
-        week = time.strftime("%G-W%V", gm)
-        for buckets, key in ((daily_buckets, day), (weekly_buckets, week)):
-            b = buckets.setdefault(key, {"requests": 0, "users": set()})
-            if r["kind"] == "request":
-                b["requests"] += 1
-            if r["username"]:
-                b["users"].add(r["username"])
+    by_day: dict[str, dict] = {}
+    for r in stat_rows:
+        try:
+            users = set(json.loads(r["users_json"]))
+        except (ValueError, TypeError):
+            users = set()
+        by_day[r["day"]] = {"requests": int(r["requests"] or 0), "users": users}
+
     daily = []
     for i in range(daily_n - 1, -1, -1):
         d = time.strftime("%Y-%m-%d", time.gmtime(now - i * 86400))
-        b = daily_buckets.get(d)
+        b = by_day.get(d)
         daily.append({
             "day": d,
             "requests": b["requests"] if b else 0,
             "users": len(b["users"]) if b else 0,
         })
+
+    # Weekly: union across each ISO week's days. Stepping by 7 days from
+    # `now` lands on a different calendar day each loop but always inside
+    # the target ISO week, so %G-W%V correctly picks out one week per step.
+    week_buckets: dict[str, dict] = {}
+    for day, b in by_day.items():
+        try:
+            gm = time.strptime(day, "%Y-%m-%d")
+        except ValueError:
+            continue
+        wk = time.strftime("%G-W%V", gm)
+        wb = week_buckets.setdefault(wk, {"requests": 0, "users": set()})
+        wb["requests"] += b["requests"]
+        wb["users"].update(b["users"])
     weekly = []
     for i in range(weekly_n - 1, -1, -1):
         wk = time.strftime("%G-W%V", time.gmtime(now - i * 7 * 86400))
-        b = weekly_buckets.get(wk)
+        wb = week_buckets.get(wk)
         weekly.append({
             "week": wk,
-            "requests": b["requests"] if b else 0,
-            "users": len(b["users"]) if b else 0,
+            "requests": wb["requests"] if wb else 0,
+            "users": len(wb["users"]) if wb else 0,
         })
     return {"daily": daily, "weekly": weekly}
 
@@ -395,7 +457,14 @@ def query_health() -> dict:
 
 
 def prune_old(retention_days: int = _RETENTION_DAYS) -> int:
-    cutoff = int(time.time()) - retention_days * 86400
+    # Align cutoff to UTC midnight: a day's events are either fully kept
+    # or fully pruned. Without this, the rollup running after a prune
+    # could observe a half-emptied day and overwrite daily_stats with
+    # partial counts.
+    import calendar
+    target_day = time.gmtime(int(time.time()) - retention_days * 86400)
+    cutoff = calendar.timegm((target_day.tm_year, target_day.tm_mon, target_day.tm_mday,
+                              0, 0, 0, 0, 0, 0))
     deleted = 0
     with db.analytics_conn() as c:
         while True:
