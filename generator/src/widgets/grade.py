@@ -128,7 +128,7 @@ def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dic
     stats_y = 100
     tags_y = stats_y + 54
     tag_padding = 18 if tags_h > 24 else 14
-    # Reserve space at the bottom for the "Generated with gh-stats"
+    # Reserve space at the bottom for the "Generated with gh-stats.com"
     # attribution. Matches the composite widget's footer convention so
     # the standalone grade widget feels visually consistent when it's
     # embedded on its own (the /api/<u>/grade.svg path).
@@ -182,6 +182,6 @@ def render_grade_widget(data: GradeData, theme_name: str = "dark", settings: dic
     <text data-gh-attribution="1" data-gh-h="{footer_h}"
           x="190" y="{card_h - 8}" text-anchor="middle"
           font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
-          font-size="9" fill="{t["text_secondary"]}" opacity="0.5">Generated with gh-stats</text>'''
+          font-size="9" fill="{t["text_secondary"]}" opacity="0.5">Generated with gh-stats.com</text>'''
 
     return card_wrapper(inner, 380, card_h, t, "")

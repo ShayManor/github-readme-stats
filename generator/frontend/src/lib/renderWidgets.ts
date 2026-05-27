@@ -466,6 +466,6 @@ export function renderAllWidgets(opts: {
   <rect width="${totalW}" height="${totalH}" rx="16" fill="${t.bg}"/>
   <rect x="0.5" y="0.5" width="${totalW-1}" height="${totalH-1}" rx="16" fill="none" stroke="${t.card_border}" stroke-width="1"/>
   ${header}${embedded}
-  <text x="${totalW/2}" y="${totalH-8}" text-anchor="middle" font-family="${font}" font-size="9" fill="${t.text_secondary}" opacity="0.5">Generated with gh-stats</text>
+  <text x="${totalW/2}" y="${totalH-8}" text-anchor="middle" font-family="${font}" font-size="9" fill="${t.text_secondary}" opacity="0.5">Generated with gh-stats.com</text>
 </svg>`
 }

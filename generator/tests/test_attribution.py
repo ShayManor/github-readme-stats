@@ -1,7 +1,7 @@
 """Per-widget attribution behaves correctly in both contexts.
 
 Standalone widget SVGs (served at /api/<u>/<widget>.svg) must show the
-"Generated with gh-stats" footer; the composite (served at /api/<u>)
+"Generated with gh-stats.com" footer; the composite (served at /api/<u>)
 must strip the per-widget footer and only show its own bottom one.
 """
 from src.models import GradeData, LanguageData, TagData
@@ -30,13 +30,13 @@ def _languages_fixture() -> list[LanguageData]:
 
 def test_standalone_grade_widget_has_attribution():
     svg = render_grade_widget(_grade_fixture(), theme_name="dark")
-    assert "Generated with gh-stats" in svg
+    assert "Generated with gh-stats.com" in svg
     assert 'data-gh-attribution="1"' in svg
 
 
 def test_standalone_languages_widget_has_attribution():
     svg = render_languages_widget(_languages_fixture(), theme_name="dark")
-    assert "Generated with gh-stats" in svg
+    assert "Generated with gh-stats.com" in svg
     assert 'data-gh-attribution="1"' in svg
 
 
@@ -55,7 +55,7 @@ def test_composite_strips_per_widget_attribution_from_grade():
     )
     # The composite has exactly ONE attribution (its own). The widget's
     # footer attribution should be gone.
-    assert composite.count("Generated with gh-stats") == 1
+    assert composite.count("Generated with gh-stats.com") == 1
     # No leftover attribution markers leaked through.
     assert "data-gh-attribution" not in composite
 
@@ -70,7 +70,7 @@ def test_composite_strips_per_widget_attribution_from_languages():
         avatar_b64="",
         show_name=False,
     )
-    assert composite.count("Generated with gh-stats") == 1
+    assert composite.count("Generated with gh-stats.com") == 1
     assert "data-gh-attribution" not in composite
 
 
@@ -89,7 +89,7 @@ def test_composite_strips_attribution_from_multiple_widgets():
     )
     # Each widget contributed an attribution; the composite contributes
     # one of its own — total visible attributions must be exactly 1.
-    assert composite.count("Generated with gh-stats") == 1
+    assert composite.count("Generated with gh-stats.com") == 1
 
 
 def test_composite_reclaims_attribution_height():

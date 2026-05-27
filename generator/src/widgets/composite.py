@@ -15,7 +15,7 @@ _ATTRIBUTION_H_RE = re.compile(r'\bdata-gh-h="(\d+)"')
 def _extract_inner(svg: str, widget_key: str) -> tuple[str, int]:
     """Extract the inner content from a widget SVG and rewrite IDs to be unique.
 
-    Also strips any per-widget "Generated with gh-stats" attribution text
+    Also strips any per-widget "Generated with gh-stats.com" attribution text
     (marked with data-gh-attribution="1") and shrinks the reported height
     by data-gh-h so the composite doesn't reserve empty space for the
     removed footer. The composite has its own attribution at the bottom
@@ -127,5 +127,5 @@ def compose_widget(
   {embedded}
   <text x="{total_w // 2}" y="{total_h - 8}" text-anchor="middle"
         font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
-        font-size="9" fill="{t["text_secondary"]}" opacity="0.5">Generated with gh-stats</text>
+        font-size="9" fill="{t["text_secondary"]}" opacity="0.5">Generated with gh-stats.com</text>
 </svg>'''

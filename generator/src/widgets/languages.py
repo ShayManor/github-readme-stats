@@ -109,5 +109,5 @@ def render_languages_widget(languages: list[LanguageData], theme_name: str = "da
     <text data-gh-attribution="1" data-gh-h="{footer_h}"
           x="190" y="{card_h - 36 - 8}" text-anchor="middle"
           font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
-          font-size="9" fill="{t["text_secondary"]}" opacity="0.5">Generated with gh-stats</text>'''
+          font-size="9" fill="{t["text_secondary"]}" opacity="0.5">Generated with gh-stats.com</text>'''
     return card_wrapper(inner, 380, card_h, t, "Languages")
