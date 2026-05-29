@@ -59,20 +59,25 @@ function Line({ label, values, labels, mode, stroke }: {
 }) {
   const width = 600
   const height = 70
+  const vbH = height + 10 // viewBox height; bottom 10 holds the x-tick marks
   const max = Math.max(1, ...values)
   const n = values.length
   const stepX = n > 1 ? width / (n - 1) : 0
   const total = values.reduce((a, b) => a + b, 0)
   const latest = values[n - 1] ?? 0
-  const xy = values.map((v, i) => {
-    const x = n > 1 ? i * stepX : width / 2
-    const y = height - (v / max) * (height - 4) - 2
-    return { x, y }
-  })
+  // Map a value to its y coordinate in viewBox space; reused for both the
+  // line points and the y-axis label positions so they stay aligned.
+  const yFor = (v: number) => height - (v / max) * (height - 4) - 2
+  const xy = values.map((v, i) => ({ x: n > 1 ? i * stepX : width / 2, y: yFor(v) }))
   const pts = xy.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
   // Sealed area polygon: only valid when we have a real line (n >= 2).
   const area = n > 1 ? `0,${height} ${pts} ${width},${height}` : ''
   const ticks = pickTicks(labels, Math.min(6, n))
+  // y-axis labels: top (max), middle, baseline (0). Percent positions are
+  // relative to the same viewBox the chart is drawn in.
+  const yMarks = max > 1
+    ? [max, Math.round(max / 2), 0]
+    : [max, 0]
 
   return (
     <div>
@@ -83,36 +88,57 @@ function Line({ label, values, labels, mode, stroke }: {
           <span className="ml-3">total <span className="text-white/80">{total.toLocaleString()}</span></span>
         </span>
       </div>
-      <svg viewBox={`0 0 ${width} ${height + 10}`} className="w-full" preserveAspectRatio="none">
-        {area && <polyline points={area} fill={stroke} fillOpacity="0.08" stroke="none" />}
-        {n > 1 && (
-          <polyline points={pts} fill="none" stroke={stroke} strokeWidth={1.5}
-                    strokeLinecap="round" strokeLinejoin="round"
-                    vectorEffect="non-scaling-stroke" />
-        )}
-        {n === 1 && (
-          <circle cx={xy[0].x} cy={xy[0].y} r={3} fill={stroke} />
-        )}
-        {ticks.map(t => {
-          const x = n > 1 ? t.idx * stepX : width / 2
-          return (
-            <line key={`tick-${t.idx}`} x1={x} x2={x} y1={height} y2={height + 3}
-                  stroke="rgb(255 255 255 / 0.15)" strokeWidth={1}
-                  vectorEffect="non-scaling-stroke" />
-          )
-        })}
-      </svg>
-      <div className="relative mt-1 h-3">
-        {ticks.map(t => (
-          <span key={`label-${t.idx}`}
-                className="absolute -translate-x-1/2 whitespace-nowrap font-mono text-[10px] text-white/40"
-                style={{ left: n > 1 ? `${(t.idx / (n - 1)) * 100}%` : '50%' }}>
-            {formatTick(t.label, mode)}
-          </span>
-        ))}
+      <div className="flex gap-1.5">
+        {/* y-axis */}
+        <div className="relative w-7 shrink-0" style={{ height: vbH }}>
+          {yMarks.map(v => (
+            <span key={v}
+                  className="absolute right-0 -translate-y-1/2 font-mono text-[10px] tabular-nums text-white/35"
+                  style={{ top: `${(yFor(v) / vbH) * 100}%` }}>
+              {fmtCompact(v)}
+            </span>
+          ))}
+        </div>
+        {/* plot + x-axis */}
+        <div className="min-w-0 flex-1">
+          <svg viewBox={`0 0 ${width} ${vbH}`} className="w-full" style={{ height: vbH }} preserveAspectRatio="none">
+            {area && <polyline points={area} fill={stroke} fillOpacity="0.08" stroke="none" />}
+            {n > 1 && (
+              <polyline points={pts} fill="none" stroke={stroke} strokeWidth={1.5}
+                        strokeLinecap="round" strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke" />
+            )}
+            {n === 1 && (
+              <circle cx={xy[0].x} cy={xy[0].y} r={3} fill={stroke} />
+            )}
+            {ticks.map(t => {
+              const x = n > 1 ? t.idx * stepX : width / 2
+              return (
+                <line key={`tick-${t.idx}`} x1={x} x2={x} y1={height} y2={height + 3}
+                      stroke="rgb(255 255 255 / 0.15)" strokeWidth={1}
+                      vectorEffect="non-scaling-stroke" />
+              )
+            })}
+          </svg>
+          <div className="relative mt-1 h-3">
+            {ticks.map(t => (
+              <span key={`label-${t.idx}`}
+                    className="absolute -translate-x-1/2 whitespace-nowrap font-mono text-[10px] text-white/40"
+                    style={{ left: n > 1 ? `${(t.idx / (n - 1)) * 100}%` : '50%' }}>
+                {formatTick(t.label, mode)}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
+}
+
+function fmtCompact(n: number): string {
+  if (n >= 10000) return `${Math.round(n / 1000)}k`
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return String(Math.round(n))
 }
 
 function pickTicks(labels: string[], n: number): { idx: number; label: string }[] {
