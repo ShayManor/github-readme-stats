@@ -33,7 +33,7 @@ export function ResultScreen({ username, generating, generatedSvg, generateError
   const [copied, setCopied] = useState(false)
   const fallbackUrl = `${window.location.origin}/api/${encodeURIComponent(username)}`
   const finalUrl = embedUrl || fallbackUrl
-  const embedSnippet = `![${username}](${finalUrl})`
+  const embedSnippet = `[![${username}](${finalUrl})](${window.location.origin})`
 
   const copy = async () => {
     try {
