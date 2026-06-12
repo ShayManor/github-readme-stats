@@ -116,6 +116,37 @@ def test_enrolled_user_with_built_widget_returns_ready(client):
     assert b"ready" in r.data
 
 
+def test_get_widget_is_case_insensitive(client):
+    """GitHub usernames are case-insensitive, so records are stored under the
+    canonical lowercase. A request for `/api/Alice` must resolve to the
+    existing `alice` record instead of missing it and returning 'building'
+    (or re-enrolling a duplicate)."""
+    dbmod.enroll("alice", {"theme": "dark"})
+    dbmod.put_widgets("alice", "h1", {"composite": "<svg>ready</svg>"})
+    dbmod.point_current_widget("alice", "h1")
+    r = client.get("/api/Alice")
+    assert r.status_code == 200
+    assert r.headers["X-Widget-Status"] == "ready"
+    assert b"ready" in r.data
+
+
+def test_get_widget_named_is_case_insensitive(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    dbmod.put_widgets("alice", "h1", {"grade": "<svg>gradesvg</svg>"})
+    dbmod.point_current_widget("alice", "h1")
+    r = client.get("/api/Alice/grade.svg")
+    assert r.status_code == 200
+    assert r.headers["X-Widget-Status"] == "ready"
+    assert b"gradesvg" in r.data
+
+
+def test_settings_get_is_case_insensitive(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    r = client.get("/api/Alice/settings")
+    assert r.status_code == 200
+    assert r.get_json()["settings"]["theme"] == "dark"
+
+
 def test_settings_patch_enqueues_rebuild(client):
     dbmod.enroll("alice", {"theme": "dark"})
     with client.session_transaction() as s:

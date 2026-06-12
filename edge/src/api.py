@@ -86,6 +86,9 @@ def health():
 def serve(username: str):
     if not _valid_username(username):
         return jsonify({"error": "invalid_username"}), 400
+    # GitHub usernames are case-insensitive; canonicalize to lowercase so the
+    # cache key and the upstream path don't fragment by case.
+    username = username.lower()
     return _serve(username, path=username)
 
 
@@ -95,6 +98,7 @@ def serve_widget(username: str, widget: str):
         return jsonify({"error": "invalid_username"}), 400
     if widget not in _ALLOWED_WIDGETS:
         return jsonify({"error": "unknown_widget"}), 400
+    username = username.lower()
     return _serve(f"{username}/{widget}", path=f"{username}/{widget}.svg")
 
 

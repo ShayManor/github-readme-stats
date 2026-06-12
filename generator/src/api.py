@@ -802,6 +802,10 @@ def _serve(username: str, widget_name: str) -> Response:
         owner's widget is unaffected. This is how unauthenticated users
         "edit" a widget — they just craft a URL.
     """
+    # GitHub usernames are case-insensitive; records are keyed by the
+    # canonical lowercase. Normalize here so `/api/Alice` resolves to the
+    # same row as `/api/alice` instead of missing it and re-enrolling.
+    username = username.lower()
     settings_row = db.get_settings(username)
     if settings_row is None:
         # Auto-enroll on first hit so embed URLs for never-seen users
@@ -977,6 +981,7 @@ def _serve_profile_widget(username: str) -> Response:
 @app.route("/api/<username>/settings", methods=["GET"])
 @rate_limited("read")
 def get_settings(username: str):
+    username = username.lower()
     s = db.get_settings(username)
     if s is None:
         return jsonify({"error": "not_enrolled"}), 404
@@ -994,6 +999,7 @@ def get_settings(username: str):
 @auth.require_same_origin
 @auth.require_github_owner
 def patch_settings(username: str):
+    username = username.lower()
     current = db.get_settings(username)
     if current is None:
         return jsonify({"error": "not_enrolled"}), 404
@@ -1029,6 +1035,7 @@ def generate(username: str):
     from . import worker
     if not is_valid_username(username):
         return jsonify({"error": "invalid_username"}), 400
+    username = username.lower()
     if db.get_settings(username) is None:
         return jsonify({"error": "not_enrolled"}), 404
 
@@ -1063,6 +1070,7 @@ def generate(username: str):
 @auth.require_same_origin
 @auth.require_github_owner
 def refresh(username: str):
+    username = username.lower()
     s = db.get_settings(username)
     if s is None:
         return jsonify({"error": "not_enrolled"}), 404
