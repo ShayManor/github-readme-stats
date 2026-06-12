@@ -237,6 +237,17 @@ app.config["MAX_CONTENT_LENGTH"] = 128 * 1024
 # We normalize to an explicit allow-list of fields and coerce/trim types.
 
 _ALLOWED_WIDGETS = {"name", "grade", "impact", "streaks", "collaborators", "focus", "languages", "achievements"}
+# Singular / other-service aliases accepted by the widget-first compat route
+# (`/api/<widget>/<u>`). Lets people paste e.g. `/api/streak/<u>` straight from
+# a streak-stats badge URL and still hit this fork's `streaks` widget.
+_WIDGET_ALIASES = {
+    "streak": "streaks",
+    "lang": "languages",
+    "langs": "languages",
+    "top-langs": "languages",
+    "achievement": "achievements",
+    "collaborator": "collaborators",
+}
 _ALLOWED_ICONS = {"trophy", "medal", "star", "hackathon"}
 _MAX_ACHIEVEMENTS = 10
 _TITLE_MAX = 80
@@ -694,6 +705,31 @@ def get_widget_named(username: str, widget: str):
     if widget not in _ALLOWED_WIDGETS and widget != "composite":
         return jsonify({"error": "unknown_widget"}), 400
     return _serve(username, widget_name=widget)
+
+
+@app.route("/api/<widget>/<username>", methods=["GET"])
+@track_request(lambda kw: _WIDGET_ALIASES.get(kw.get("widget"), kw.get("widget")))
+@rate_limited("read")
+def get_widget_first(widget: str, username: str):
+    """Widget-first compat format: `/api/<widget>/<username>`.
+
+    The native shape is `/api/<u>/<widget>.svg`, but people copy the
+    reversed `/api/streak/<u>` form out of other badge services' READMEs.
+    Map the (aliased) widget name onto the same auto-enrolling `_serve`
+    path so a first hit for a never-seen user queues a build instead of
+    falling through to the catch-all 404.
+
+    Routing precedence: Flask matches the static-suffixed
+    `/api/<u>/<widget>.svg` rule and the literal `/api/<u>/data` (and
+    /settings, /generate, /refresh) rules ahead of this fully-dynamic one,
+    so it only claims the two-segment space that previously 404'd.
+    """
+    if not is_valid_username(username):
+        return jsonify({"error": "invalid_username"}), 400
+    name = _WIDGET_ALIASES.get(widget, widget)
+    if name not in _ALLOWED_WIDGETS and name != "composite":
+        return jsonify({"error": "unknown_widget"}), 400
+    return _serve(username, widget_name=name)
 
 
 @app.route("/api/top-langs", methods=["GET"])

@@ -147,6 +147,67 @@ def test_settings_get_is_case_insensitive(client):
     assert r.get_json()["settings"]["theme"] == "dark"
 
 
+# ---- widget-first compat format: /api/<widget>/<username> ----------------
+# Reversed shape (`/api/streak/<u>`) that people copy from other badge
+# services. Must resolve to the named widget and auto-enroll/build on miss.
+
+
+def test_widget_first_streak_alias_serves_streaks_widget(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    dbmod.put_widgets("alice", "h1", {"streaks": "<svg>streaksvg</svg>"})
+    dbmod.point_current_widget("alice", "h1")
+    r = client.get("/api/streak/alice")
+    assert r.status_code == 200
+    assert r.headers["X-Widget-Status"] == "ready"
+    assert b"streaksvg" in r.data
+
+
+def test_widget_first_canonical_name_serves_widget(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    dbmod.put_widgets("alice", "h1", {"grade": "<svg>gradesvg</svg>"})
+    dbmod.point_current_widget("alice", "h1")
+    r = client.get("/api/grade/alice")
+    assert r.status_code == 200
+    assert b"gradesvg" in r.data
+
+
+def test_widget_first_unknown_user_auto_enrolls_and_builds(client):
+    """The whole point: a never-seen user in widget-first form must queue a
+    build instead of returning 404."""
+    r = client.get("/api/streak/newcomer")
+    assert r.status_code == 200
+    assert r.headers["X-Widget-Status"] == "building"
+    assert dbmod.get_settings("newcomer") is not None
+
+
+def test_widget_first_is_case_insensitive(client):
+    r = client.get("/api/streak/Newcomer")
+    assert r.status_code == 200
+    assert dbmod.get_settings("newcomer") is not None
+
+
+def test_widget_first_unknown_widget_rejected(client):
+    r = client.get("/api/boguswidget/alice")
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "unknown_widget"
+
+
+def test_widget_first_does_not_shadow_named_svg_route(client):
+    """The native `/api/<u>/<widget>.svg` route must still win for .svg URLs."""
+    dbmod.enroll("alice", {"theme": "dark"})
+    dbmod.put_widgets("alice", "h1", {"grade": "<svg>namedsvg</svg>"})
+    dbmod.point_current_widget("alice", "h1")
+    r = client.get("/api/alice/grade.svg")
+    assert r.status_code == 200
+    assert b"namedsvg" in r.data
+
+
+def test_widget_first_does_not_shadow_data_route(client):
+    dbmod.enroll("alice", {"theme": "dark"})
+    r = client.get("/api/alice/data")
+    assert r.is_json  # data route returns JSON status, not an SVG
+
+
 def test_settings_patch_enqueues_rebuild(client):
     dbmod.enroll("alice", {"theme": "dark"})
     with client.session_transaction() as s:
