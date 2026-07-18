@@ -36,6 +36,39 @@ def _assert_repo_full_name(name: str) -> str:
     return name
 
 
+class GitHubTransientError(Exception):
+    """A GitHub call failed transiently (rate limit, 5xx, or a network error)
+    rather than returning real data.
+
+    This MUST NOT be swallowed into a zero/empty count. A contribution count
+    computed from a rate-limited response is 0, and persisting that 0 silently
+    overwrites the last good value in fetcher.db — which is exactly how a
+    traffic spike turns into permanently-wrong "0 commits" cards until the
+    next successful fetch. Propagate it instead so the caller aborts the fetch
+    and keeps the previously-cached record."""
+
+
+def _raise_if_transient(resp) -> None:
+    """Raise GitHubTransientError if `resp` looks like a rate limit or server
+    error. A genuine NOT_FOUND (unknown user) is left alone — that is a real,
+    persistable "this user has no data" answer, not a transient failure."""
+    if resp.status_code in (429, 500, 502, 503, 504):
+        raise GitHubTransientError(f"HTTP {resp.status_code}")
+    # Primary/secondary REST rate limits come back as 403 with the remaining
+    # budget at 0 (or a "secondary rate limit" message).
+    if resp.status_code == 403 and resp.headers.get("X-RateLimit-Remaining") == "0":
+        raise GitHubTransientError("REST rate limit exhausted")
+    # GraphQL reports rate limits as HTTP 200 with an `errors` array — the same
+    # 200 that a valid response uses — so the body has to be inspected.
+    try:
+        body = resp.json()
+    except ValueError:
+        return
+    for err in (body.get("errors") or []):
+        if err.get("type") in ("RATE_LIMITED", "SERVICE_UNAVAILABLE"):
+            raise GitHubTransientError(err.get("message") or err.get("type"))
+
+
 class GitHubDataSource(Protocol):
     """Protocol for GitHub data sources - allows swapping implementations."""
 
@@ -294,6 +327,13 @@ class DirectAPISource:
                 return self._fetch_commit_count_graphql_range(username, since_date)
             else:
                 return self._fetch_commit_count_graphql_alltime(username)
+        except GitHubTransientError:
+            # Rate limit / 5xx: abort the fetch so the caller keeps the last
+            # good count instead of persisting a spurious 0.
+            raise
+        except requests.RequestException as e:
+            # A network-level failure is transient too.
+            raise GitHubTransientError(str(e))
         except Exception as e:
             print(f"  Error fetching contribution count: {e}")
             return 0
@@ -327,6 +367,7 @@ class DirectAPISource:
             timeout=config.API_TIMEOUT
         )
 
+        _raise_if_transient(resp)
         if not resp.ok or 'data' not in resp.json():
             print(f"  GraphQL error: {resp.status_code}")
             return 0
@@ -367,6 +408,7 @@ class DirectAPISource:
                 headers=headers,
                 timeout=config.API_TIMEOUT,
             )
+            _raise_if_transient(year_resp)
             if not year_resp.ok:
                 print(f"    {year}: HTTP {year_resp.status_code}")
                 return year, 0
@@ -424,6 +466,7 @@ class DirectAPISource:
             timeout=config.API_TIMEOUT,
         )
 
+        _raise_if_transient(resp)
         if resp.ok:
             data = resp.json()
             if 'data' in data and data['data'].get('user'):
@@ -454,9 +497,14 @@ class DirectAPISource:
                 timeout=config.API_TIMEOUT
             )
 
+            _raise_if_transient(resp)
             if resp.ok:
                 data = resp.json()
                 return data.get("total_count", 0)
+        except GitHubTransientError:
+            raise
+        except requests.RequestException as e:
+            raise GitHubTransientError(str(e))
         except Exception as e:
             print(f"Warning: Failed to fetch PR count via search API: {e}")
 

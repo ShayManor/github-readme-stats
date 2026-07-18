@@ -73,3 +73,44 @@ def test_fetch_handles_404():
     )
     data = github.fetch_github_data("nope", token="t")
     assert data["user"].get("message") == "Not Found" or data["user"] is None
+
+
+@responses.activate
+def test_commit_count_raises_on_graphql_rate_limit():
+    # GraphQL reports a rate limit as HTTP 200 with an `errors` array — the
+    # exact shape a valid response uses. It must NOT be swallowed into a 0
+    # that would overwrite the last good count in fetcher.db.
+    responses.add(
+        responses.POST, "https://api.github.com/graphql",
+        json={"data": {"user": None},
+              "errors": [{"type": "RATE_LIMITED", "message": "API rate limit exceeded"}]},
+        status=200,
+    )
+    src = github.DirectAPISource(token="t")
+    with pytest.raises(github.GitHubTransientError):
+        src.fetch_commit_count("alice", [])
+
+
+@responses.activate
+def test_commit_count_raises_on_rest_rate_limit():
+    # A 403 with the remaining budget at 0 is a rate limit, not a real answer.
+    responses.add(
+        responses.POST, "https://api.github.com/graphql",
+        json={"message": "rate limited"}, status=403,
+        headers={"X-RateLimit-Remaining": "0"},
+    )
+    src = github.DirectAPISource(token="t")
+    with pytest.raises(github.GitHubTransientError):
+        src.fetch_commit_count("alice", [])
+
+
+@responses.activate
+def test_commit_count_zero_on_not_found_is_not_transient():
+    # A genuinely unknown user (NOT_FOUND, no rate-limit error) is a real,
+    # persistable "no data" answer — return 0, don't raise.
+    responses.add(
+        responses.POST, "https://api.github.com/graphql",
+        json={"data": {"user": None}}, status=200,
+    )
+    src = github.DirectAPISource(token="t")
+    assert src.fetch_commit_count("ghost", []) == 0

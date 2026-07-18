@@ -30,6 +30,23 @@ def test_upsert_and_get_round_trip(tmp_db):
     assert row["fetched_at"]
 
 
+def test_fetch_metrics_round_trip(tmp_db):
+    # Zero-filled for every known outcome before anything is recorded.
+    assert dbmod.read_fetch_metrics() == {o: 0 for o in dbmod.FETCH_OUTCOMES}
+    dbmod.bump_fetch_metric("ok")
+    dbmod.bump_fetch_metric("ok")
+    dbmod.bump_fetch_metric("rate_limited")
+    counts = dbmod.read_fetch_metrics()
+    assert counts["ok"] == 2
+    assert counts["rate_limited"] == 1
+    assert counts["not_found"] == 0
+
+
+def test_fetch_metric_unknown_outcome_buckets_to_error(tmp_db):
+    dbmod.bump_fetch_metric("bogus")
+    assert dbmod.read_fetch_metrics()["error"] == 1
+
+
 def test_payload_hash_is_deterministic_and_changes_on_diff():
     h1 = dbmod.payload_hash({"a": 1, "b": 2})
     h2 = dbmod.payload_hash({"b": 2, "a": 1})

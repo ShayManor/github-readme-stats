@@ -25,7 +25,19 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE INDEX IF NOT EXISTS idx_users_fetched_at ON users(fetched_at);
 CREATE INDEX IF NOT EXISTS idx_users_last_requested_at ON users(last_requested_at);
+
+-- Monotonic fetch-outcome counters, shared across the web workers and the
+-- cron container (both mount the same fetcher.db). Scraped via /metrics so
+-- rate limits surface in the monitoring stack instead of dying silently.
+CREATE TABLE IF NOT EXISTS fetch_metrics (
+    outcome TEXT PRIMARY KEY,
+    count   INTEGER NOT NULL DEFAULT 0
+);
 """
+
+# The full label set is emitted even at zero so the counter exists in the
+# scrape target from the first request (rate() needs a prior sample to work).
+FETCH_OUTCOMES = ("ok", "not_found", "rate_limited", "error")
 
 
 def _now() -> str:
@@ -119,3 +131,35 @@ def users_due_for_refresh(hours: int, active_within_days: int) -> list[str]:
 def list_usernames() -> list[str]:
     with _connect() as c:
         return [r["username"] for r in c.execute("SELECT username FROM users ORDER BY username").fetchall()]
+
+
+def bump_fetch_metric(outcome: str, n: int = 1) -> None:
+    """Increment the counter for a fetch outcome (one of FETCH_OUTCOMES).
+
+    Best-effort telemetry: a metrics write must never break a fetch, so
+    failures are swallowed."""
+    if outcome not in FETCH_OUTCOMES:
+        outcome = "error"
+    try:
+        with _connect() as c:
+            c.execute(
+                """INSERT INTO fetch_metrics(outcome, count) VALUES (?, ?)
+                   ON CONFLICT(outcome) DO UPDATE SET count = count + excluded.count""",
+                (outcome, n),
+            )
+            c.commit()
+    except sqlite3.Error:
+        pass
+
+
+def read_fetch_metrics() -> dict:
+    """Return {outcome: count} for every outcome in FETCH_OUTCOMES (zero-filled)."""
+    counts = {o: 0 for o in FETCH_OUTCOMES}
+    try:
+        with _connect() as c:
+            for row in c.execute("SELECT outcome, count FROM fetch_metrics"):
+                if row["outcome"] in counts:
+                    counts[row["outcome"]] = row["count"]
+    except sqlite3.Error:
+        pass
+    return counts

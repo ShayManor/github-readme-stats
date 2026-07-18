@@ -58,6 +58,24 @@ def health():
     return jsonify({"status": "ok", "service": "fetcher", "users": len(db.list_usernames())})
 
 
+@app.route("/metrics", methods=["GET"])
+def metrics():
+    """Prometheus-format fetch-outcome counters for the monitoring stack.
+
+    Deliberately unauthenticated (the rest of the API requires the internal
+    token): it exposes only aggregate counts — no usernames, no payloads — and
+    the scraper (vmagent) can't send our internal header. The counts are read
+    from fetcher.db, so they include the cron container's fetches too."""
+    counts = db.read_fetch_metrics()
+    lines = [
+        "# HELP ghstats_fetch_total GitHub fetch outcomes by result.",
+        "# TYPE ghstats_fetch_total counter",
+    ]
+    for outcome, n in counts.items():
+        lines.append(f'ghstats_fetch_total{{outcome="{outcome}"}} {n}')
+    return Response("\n".join(lines) + "\n", mimetype="text/plain; version=0.0.4")
+
+
 @app.route("/data/<username>", methods=["GET"])
 @require_internal_token
 def get_data(username: str):
@@ -98,17 +116,19 @@ def force_fetch():
     t0 = time.monotonic()
     try:
         data = github.fetch_github_data(username, token=config.GITHUB_PAT)
-    except Exception:
+    except Exception as e:
         # Previously returned f"fetch failed: {e}" which leaks internal
         # exception text (URLs, stack fragments) across the trust boundary.
         analytics.record_fetch(username, 502, int((time.monotonic() - t0) * 1000))
-        log.exception("github fetch failed for %s", username)
+        _record_fetch_failure(username, e)
         return jsonify({"error": "fetch_failed"}), 502
     if _is_github_not_found(data):
         data = {"error": "not_found"}
         analytics.record_fetch(username, 404, int((time.monotonic() - t0) * 1000))
+        db.bump_fetch_metric("not_found")
     else:
         analytics.record_fetch(username, 200, int((time.monotonic() - t0) * 1000))
+        db.bump_fetch_metric("ok")
     old = db.get_user(username)
     old_hash = old["payload_hash"] if old else None
     new_hash = db.upsert_user(username, data)
@@ -132,13 +152,15 @@ def _bg_fetch(username: str) -> None:
             if _is_github_not_found(data):
                 data = {"error": "not_found"}
                 analytics.record_fetch(username, 404, int((time.monotonic() - t0) * 1000))
+                db.bump_fetch_metric("not_found")
             else:
                 analytics.record_fetch(username, 200, int((time.monotonic() - t0) * 1000))
+                db.bump_fetch_metric("ok")
             payload_hash = db.upsert_user(username, data)
             ok = True
-        except Exception:
+        except Exception as e:
             analytics.record_fetch(username, 502, int((time.monotonic() - t0) * 1000))
-            log.exception("background fetch failed for %s", username)
+            _record_fetch_failure(username, e)
             payload_hash = ""
             ok = False
         _notify_generator_data_ready(username, payload_hash, ok)
@@ -221,6 +243,18 @@ def _is_github_not_found(data: dict) -> bool:
     if isinstance(user, dict) and user.get("message") == "Not Found":
         return True
     return False
+
+
+def _record_fetch_failure(username: str, exc: Exception) -> None:
+    """Classify a failed fetch for metrics + logs. A transient failure (rate
+    limit / 5xx / network) is the signal worth surfacing: it means we aborted
+    and kept the last-good record instead of persisting zeros."""
+    if isinstance(exc, github.GitHubTransientError):
+        db.bump_fetch_metric("rate_limited")
+        log.warning("github fetch transient failure for %s (kept last-good): %s", username, exc)
+    else:
+        db.bump_fetch_metric("error")
+        log.exception("github fetch failed for %s", username)
 
 
 def main():

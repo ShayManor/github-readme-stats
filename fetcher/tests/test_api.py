@@ -30,6 +30,20 @@ def test_endpoints_require_internal_token(client):
     assert r.status_code == 401
 
 
+def test_metrics_endpoint_no_auth_and_prometheus_format(client):
+    from src import db as dbmod
+    dbmod.bump_fetch_metric("ok")
+    dbmod.bump_fetch_metric("rate_limited")
+    r = client.get("/metrics")
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert "# TYPE ghstats_fetch_total counter" in body
+    assert 'ghstats_fetch_total{outcome="ok"} 1' in body
+    assert 'ghstats_fetch_total{outcome="rate_limited"} 1' in body
+    # Every outcome is emitted even at zero so rate() has a baseline sample.
+    assert 'ghstats_fetch_total{outcome="not_found"} 0' in body
+
+
 @resp_lib.activate
 def test_data_auto_fetches_on_miss(client, monkeypatch):
     # The fetcher fires the independent GitHub calls in parallel, so we

@@ -18,9 +18,17 @@ def tick(hours: int, active_within_days: int, gc_days: int) -> dict:
             user = data.get("user")
             if user is None or (isinstance(user, dict) and user.get("message") == "Not Found"):
                 data = {"error": "not_found"}
+                db.bump_fetch_metric("not_found")
+            else:
+                db.bump_fetch_metric("ok")
             db.upsert_user(username, data)
             refreshed += 1
+        except github.GitHubTransientError as e:
+            db.bump_fetch_metric("rate_limited")
+            log.warning("refresh rate-limited for %s (kept last-good): %s", username, e)
+            failed += 1
         except Exception as e:
+            db.bump_fetch_metric("error")
             log.warning("refresh failed for %s: %s", username, e)
             failed += 1
     gc_removed = db.delete_stale(days=gc_days)
