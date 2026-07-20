@@ -480,6 +480,45 @@ def test_top_langs_ignores_upstream_specific_query_params(client):
     assert b"langs" in r.data
 
 
+# ---- Trailing-slash tolerance -----------------------------------------------
+# Flask's default strict_slashes turns `/api/top-langs/?username=X` — the exact
+# shape upstream github-readme-stats prints (note the '/' before '?') — into a
+# hard 404 with no redirect. Every /api route had the same latent bug: any
+# copied URL carrying a stray trailing slash 404'd. These pin the lenient
+# behavior so both forms resolve.
+
+
+def test_top_langs_trailing_slash_before_query(client):
+    """Upstream's canonical URL is `/api/top-langs/?username=X`. The trailing
+    slash must not 404 — it's the single most common broken embed."""
+    dbmod.enroll("alice", {"theme": "dark"})
+    dbmod.put_widgets("alice", "h1", {"languages": "<svg>langs</svg>"})
+    dbmod.point_current_widget("alice", "h1")
+    r = client.get("/api/top-langs/?username=alice")
+    assert r.status_code == 200
+    assert b"langs" in r.data
+
+
+def test_widget_first_trailing_slash(client):
+    """`/api/streak/alice/` must resolve to the same widget as `/api/streak/alice`."""
+    dbmod.enroll("alice", {"theme": "dark"})
+    dbmod.put_widgets("alice", "h1", {"streaks": "<svg>streaksvg</svg>"})
+    dbmod.point_current_widget("alice", "h1")
+    r = client.get("/api/streak/alice/")
+    assert r.status_code == 200
+    assert b"streaksvg" in r.data
+
+
+def test_composite_trailing_slash(client):
+    """`/api/alice/` must resolve like `/api/alice`."""
+    dbmod.enroll("alice", {"theme": "dark"})
+    dbmod.put_widgets("alice", "h1", {"composite": "<svg>compositesvg</svg>"})
+    dbmod.point_current_widget("alice", "h1")
+    r = client.get("/api/alice/")
+    assert r.status_code == 200
+    assert b"compositesvg" in r.data
+
+
 def test_enroll_endpoint_is_gone(client):
     r = client.post("/api/enroll", json={"username": "alice"},
                     headers={"Origin": "https://gh-stats.com"})

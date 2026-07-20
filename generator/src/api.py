@@ -208,6 +208,14 @@ _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 app = Flask(__name__, static_folder=None)
 
+# Tolerate stray trailing slashes on every route. README embeds are copied by
+# hand from all over — upstream github-readme-stats even prints its canonical
+# URL as `/api/top-langs/?username=X` (note the '/' before '?'). Flask's
+# default strict_slashes turns any such URL into a hard 404 with no redirect,
+# so a single misplaced slash silently breaks a user's widget. Set on the map
+# before the route decorators run so every rule inherits the lenient default.
+app.url_map.strict_slashes = False
+
 if config.SECRET_KEY:
     app.secret_key = config.SECRET_KEY
 else:

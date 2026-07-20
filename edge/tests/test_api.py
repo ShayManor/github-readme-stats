@@ -44,6 +44,17 @@ def test_origin_error_returns_503(client):
     assert r.status_code == 503
 
 
+@responses.activate
+def test_trailing_slash_tolerated(client):
+    """A hand-copied `/alice/` must resolve like `/alice`, not 404."""
+    responses.add(responses.GET, "http://gen:5002/api/alice",
+                  body=b"<svg>ready</svg>", status=200,
+                  headers={"X-Widget-Status": "ready", "Content-Type": "image/svg+xml"})
+    r = client.get("/alice/")
+    assert r.status_code == 200
+    assert r.data == b"<svg>ready</svg>"
+
+
 def test_health(client):
     r = client.get("/health")
     assert r.status_code == 200

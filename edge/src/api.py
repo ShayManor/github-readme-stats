@@ -11,6 +11,10 @@ from flask_compress import Compress
 from . import analytics, cache as cache_mod, config
 
 app = Flask(__name__)
+# Tolerate stray trailing slashes on every route, matching the generator. A
+# hand-copied embed URL like `/alice/` should resolve like `/alice` instead of
+# Flask's default strict_slashes 404. Set before the route decorators run.
+app.url_map.strict_slashes = False
 Compress(app)
 cache_ext = cache_mod.build_cache(app)
 log = logging.getLogger("edge")
